@@ -39,3 +39,19 @@ bash scripts/build_kernel.sh
 - M5：BusyBox RootFS + NFS 启动。
 - M6：双网口、固定 MAC、LCD、音频、I2C/SPI/CAN/RS485。
 - M7：A/B 升级、恢复、产测与文档。
+
+
+docs/runbooks/
+    从零开始复现某项操作的完整指令
+
+docs/milestones/
+    记录阶段目标、验收结果和遗留问题
+
+docs/troubleshooting/
+    记录错误现象、原因和解决方案
+
+docs/decisions/
+    记录为什么选择某种架构、分支或配置
+
+artifacts/
+    保存校验值、构建摘要和精简后的测试结果
