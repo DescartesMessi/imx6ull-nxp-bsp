@@ -20,5 +20,22 @@ make -C "$SRC" O="$OUT" ARCH="$ARCH" CROSS_COMPILE="$CROSS_COMPILE" "$UBOOT_DEFC
 set -o pipefail
 make -C "$SRC" O="$OUT" ARCH="$ARCH" CROSS_COMPILE="$CROSS_COMPILE" -j"$JOBS" 2>&1 | tee "$LOG"
 
-sha256sum "$OUT"/u-boot* 2>/dev/null | tee "$OUT/SHA256SUMS" || true
-ls -lh "$OUT"/u-boot* 2>/dev/null || true
+(
+    cd "$OUT"
+
+    sha256sum \
+        u-boot \
+        u-boot.bin \
+        u-boot.imx \
+        System.map \
+        > SHA256SUMS
+
+    ls -lh \
+        u-boot \
+        u-boot.bin \
+        u-boot.imx \
+        System.map \
+        .config
+)
+
+cat "$OUT/SHA256SUMS"
