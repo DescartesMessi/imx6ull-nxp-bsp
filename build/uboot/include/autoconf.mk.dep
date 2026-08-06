@@ -1,0 +1,217 @@
+include/config/auto.conf: \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/common.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/linux/kconfig.h \
+ include/generated/autoconf.h include/config.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/config_defaults.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/config_uncmd_spl.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/configs/mx6ull_alientek_jjl.h \
+ include/asm/arch/imx-regs.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/arch/arm/include/asm/imx-common/regs-lcdif.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/arch/arm/include/asm/imx-common/regs-common.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/linux/types.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/linux/posix_types.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/linux/stddef.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/arch/arm/include/asm/posix_types.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/arch/arm/include/asm/types.h \
+ /usr/local/arm/gcc-linaro-4.9.4-2017.01-x86_64_arm-linux-gnueabihf/lib/gcc/arm-linux-gnueabihf/4.9.4/include/stdbool.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/linux/sizes.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/configs/mx6_common.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/arch/arm/include/asm/imx-common/gpio.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/arch/arm/include/asm/config.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/config_fallbacks.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/asm-offsets.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/linux/bitops.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/linux/compiler.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/linux/compiler-gcc.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/arch/arm/include/asm/bitops.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/arch/arm/include/asm/proc-armv/system.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/asm-generic/bitops/__fls.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/asm-generic/bitops/__ffs.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/asm-generic/bitops/fls.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/asm-generic/bitops/fls64.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/linux/string.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/arch/arm/include/asm/string.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/linux/linux_string.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/linux/stringify.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/arch/arm/include/asm/ptrace.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/arch/arm/include/asm/proc-armv/ptrace.h \
+ /usr/local/arm/gcc-linaro-4.9.4-2017.01-x86_64_arm-linux-gnueabihf/lib/gcc/arm-linux-gnueabihf/4.9.4/include/stdarg.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/linux/kernel.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/part.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/ide.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/common.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/flash.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/image.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/compiler.h \
+ /usr/local/arm/gcc-linaro-4.9.4-2017.01-x86_64_arm-linux-gnueabihf/lib/gcc/arm-linux-gnueabihf/4.9.4/include/stddef.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/arch/arm/include/asm/byteorder.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/linux/byteorder/little_endian.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/linux/byteorder/swab.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/linux/byteorder/generic.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/lmb.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/arch/arm/include/asm/u-boot.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/asm-generic/u-boot.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/command.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/linker_lists.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/arch/arm/include/asm/global_data.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/asm-generic/global_data.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/membuff.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/linux/list.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/linux/poison.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/display_options.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/arch/arm/include/asm/mach-types.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/arch/arm/include/asm/setup.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/arch/arm/include/asm/u-boot-arm.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/uuid.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/vsprintf.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/u-boot/crc.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/net.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/arch/arm/include/asm/cache.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/arch/arm/include/asm/system.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/bootstage.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/environment.h \
+ /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/mmc.h
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/linux/kconfig.h:
+
+include/generated/autoconf.h:
+
+include/config.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/config_defaults.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/config_uncmd_spl.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/configs/mx6ull_alientek_jjl.h:
+
+include/asm/arch/imx-regs.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/arch/arm/include/asm/imx-common/regs-lcdif.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/arch/arm/include/asm/imx-common/regs-common.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/linux/types.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/linux/posix_types.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/linux/stddef.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/arch/arm/include/asm/posix_types.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/arch/arm/include/asm/types.h:
+
+/usr/local/arm/gcc-linaro-4.9.4-2017.01-x86_64_arm-linux-gnueabihf/lib/gcc/arm-linux-gnueabihf/4.9.4/include/stdbool.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/linux/sizes.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/configs/mx6_common.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/arch/arm/include/asm/imx-common/gpio.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/arch/arm/include/asm/config.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/config_fallbacks.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/asm-offsets.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/linux/bitops.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/linux/compiler.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/linux/compiler-gcc.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/arch/arm/include/asm/bitops.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/arch/arm/include/asm/proc-armv/system.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/asm-generic/bitops/__fls.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/asm-generic/bitops/__ffs.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/asm-generic/bitops/fls.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/asm-generic/bitops/fls64.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/linux/string.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/arch/arm/include/asm/string.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/linux/linux_string.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/linux/stringify.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/arch/arm/include/asm/ptrace.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/arch/arm/include/asm/proc-armv/ptrace.h:
+
+/usr/local/arm/gcc-linaro-4.9.4-2017.01-x86_64_arm-linux-gnueabihf/lib/gcc/arm-linux-gnueabihf/4.9.4/include/stdarg.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/linux/kernel.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/part.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/ide.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/common.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/flash.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/image.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/compiler.h:
+
+/usr/local/arm/gcc-linaro-4.9.4-2017.01-x86_64_arm-linux-gnueabihf/lib/gcc/arm-linux-gnueabihf/4.9.4/include/stddef.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/arch/arm/include/asm/byteorder.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/linux/byteorder/little_endian.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/linux/byteorder/swab.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/linux/byteorder/generic.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/lmb.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/arch/arm/include/asm/u-boot.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/asm-generic/u-boot.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/command.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/linker_lists.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/arch/arm/include/asm/global_data.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/asm-generic/global_data.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/membuff.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/linux/list.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/linux/poison.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/display_options.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/arch/arm/include/asm/mach-types.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/arch/arm/include/asm/setup.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/arch/arm/include/asm/u-boot-arm.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/uuid.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/vsprintf.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/u-boot/crc.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/net.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/arch/arm/include/asm/cache.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/arch/arm/include/asm/system.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/bootstage.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/environment.h:
+
+/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources/uboot-imx/include/mmc.h:
