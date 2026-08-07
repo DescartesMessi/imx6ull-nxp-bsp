@@ -1,1 +1,10 @@
 
+# Kernel/U-Boot build output
+build/
+
+# Build logs
+*.log
+
+# Temporary files
+*.swp
+*.tmp
