@@ -8,7 +8,7 @@ deps_board/freescale/mx6ull_alientek_jjl/mx6ull_alientek_jjl.o := \
     $(wildcard include/config/sys/i2c/mxc.h) \
     $(wildcard include/config/power.h) \
     $(wildcard include/config/ldo/bypass/check.h) \
-    $(wildcard include/config/mx6ull/evk/emmc/rework.h) \
+    $(wildcard include/config/target/mx6ull/alientek/jjl.h) \
     $(wildcard include/config/fsl/qspi.h) \
     $(wildcard include/config/fsl/esdhc.h) \
     $(wildcard include/config/spl/build.h) \

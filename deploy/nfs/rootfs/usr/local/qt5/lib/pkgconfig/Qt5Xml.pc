@@ -1,0 +1,13 @@
+prefix=/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/build/sysroot/usr/local/qt5
+exec_prefix=${prefix}
+libdir=/usr/local/qt5/lib
+includedir=/usr/local/qt5/include
+
+
+Name: Qt5 Xml
+Description: Qt Xml module
+Version: 5.12.9
+Libs: -L${libdir} -lQt5Xml 
+Cflags: -DQT_XML_LIB -I${includedir}/QtXml -I${includedir}
+Requires: Qt5Core
+
