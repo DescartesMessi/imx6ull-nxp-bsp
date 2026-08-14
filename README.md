@@ -1,57 +1,20 @@
 # i.MX6ULL NXP Official BSP Project
-
-面向 i.MX6ULL（512 MiB DDR3L、8 GiB eMMC）开发板的可复现 BSP 工程。
-
-## 原则
-
-1. NXP 官方 U-Boot/Linux 源码保持可追溯，不直接把生成物提交到 Git。
-2. 板级修改通过独立分支与 patch series 管理。
-3. U-Boot、Kernel、DTB、RootFS 分阶段替换，每一步保留可启动基线。
-4. `sources/`、`build/`、`deploy/` 不进入主仓库；GitHub 保存脚本、配置、补丁、文档和测试记录。
+针对正点原子imx6ull v2.8（emmc版本）设计的板级支持包，通过Uboot-->linux内核、dtb设备树-->rootfs根文件系统全路径，并且完善了板级设备驱动(编译进内核)；让你的开发板不在是砖；
 
 ## 快速开始
-
+在开始之前，你需要在你的Ubuntu设备上安装好tftp与nfs，这里/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/deploy/nfs/rootfs是nfs文件夹，/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/deploy/tftp是tftp传输的文件夹；
+首先你可以直接通过正点原子的imxdownload文件下载Uboot到SD卡中，在通过emmc启动Uboot，之后设置Uboot变量；你就可以启动开发板，/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/deploy/nfs/rootfs/usr/local/bin路径下面是各个板载设备驱动的测试文件
 ```bash
-cp manifest/sources.env.example manifest/sources.env
-bash scripts/check_host.sh
-bash scripts/bootstrap_sources.sh
-bash scripts/build_uboot.sh
-bash scripts/build_kernel.sh
+setenv bootargs 'console=tty0 console=ttymxc0,115200n8 root=/dev/nfs rw init=/linuxrc nfsroot=192.168.31.218:/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/deploy/nfs/rootfs,v3,tcp,nolock ip=192.168.31.50:192.168.31.218:192.168.31.1:255.255.255.0::eth0:off ipv6.disable=1'
+setenv bootcmd 'tftp 80800000 zImage; tftp 83000000 imx6ull-alientek-jjl.dtb; bootz 80800000 - 83000000'
+saveenv 
+run bootcmd
 ```
 
 ## 目录
 
-- `manifest/`：官方仓库、tag、工具链和锁定提交。
-- `scripts/`：下载、编译、部署、导出补丁脚本。
-- `configs/`：可复现 defconfig 与 BusyBox 配置。
-- `board/imx6ull-jjl/`：板级源码、DTS、RootFS overlay。
-- `patches/`：相对 NXP tag 的 U-Boot/Linux patch series。
-- `docs/`：架构、里程碑、调试记录。
-- `artifacts/`：只放校验清单或 release 索引，不提交大二进制。
+- `/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/sources`：源码文件，Uboot、LInux、第三方库源码文件；基于源码文件进行修改；
+- `/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/scripts`：编译脚本文件
+- `/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/docs`：等待完善的项目文件
+- `/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/build`：编译中间产物；
 
-## 里程碑
-
-- M0：官方源码/tag 可复现下载。
-- M1：官方 EVK U-Boot 编译成功。
-- M2：移植自有板卡 U-Boot，SD 启动成功。
-- M3：官方 Linux/DTB 编译成功。
-- M4：自有板卡 DTS，eMMC RootFS 启动成功。
-- M5：BusyBox RootFS + NFS 启动。
-- M6：双网口、固定 MAC、LCD、音频、I2C/SPI/CAN/RS485。
-- M7：A/B 升级、恢复、产测与文档。
-
-
-docs/runbooks/
-    从零开始复现某项操作的完整指令
-
-docs/milestones/
-    记录阶段目标、验收结果和遗留问题
-
-docs/troubleshooting/
-    记录错误现象、原因和解决方案
-
-docs/decisions/
-    记录为什么选择某种架构、分支或配置
-
-artifacts/
-    保存校验值、构建摘要和精简后的测试结果
