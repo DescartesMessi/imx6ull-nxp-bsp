@@ -1,10 +1,10 @@
-prefix=/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/build/sysroot/usr/local/qt5
+prefix=/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/build/3rdparty/qt5-staging/usr/local/qt5
 exec_prefix=${prefix}
-libdir=/usr/local/qt5/lib
-includedir=/usr/local/qt5/include
+libdir=${prefix}/lib
+includedir=${prefix}/include
 
-host_bins=${prefix}/bin
-qt_config=shared rpath release c++11 c++14 concurrent dbus reduce_exports stl properties animation textcodec big_codecs clock-monotonic codecs textdate datestring doubleconversion eventfd filesystemiterator filesystemwatcher gestures iconv itemmodel proxymodel identityproxymodel inotify library mimetype process statemachine regularexpression settings sharedmemory sortfilterproxymodel stringlistmodel systemsemaphore temporaryfile threadsafe-cloexec translation xmlstream xmlstreamreader xmlstreamwriter
+host_bins=/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/build/3rdparty/qt5-staging/host/bin
+qt_config=shared rpath release c++11 c++14 concurrent reduce_exports stl properties animation textcodec big_codecs clock-monotonic codecs textdate datestring doubleconversion eventfd filesystemiterator filesystemwatcher gestures iconv itemmodel proxymodel identityproxymodel inotify library mimetype process statemachine regularexpression settings sharedmemory sortfilterproxymodel stringlistmodel systemsemaphore temporaryfile threadsafe-cloexec translation xmlstream xmlstreamreader xmlstreamwriter
 
 Name: Qt5 Core
 Description: Qt Core module

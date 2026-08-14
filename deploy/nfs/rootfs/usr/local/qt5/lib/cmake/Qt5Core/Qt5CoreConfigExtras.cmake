@@ -2,7 +2,7 @@
 if (NOT TARGET Qt5::qmake)
     add_executable(Qt5::qmake IMPORTED)
 
-    set(imported_location "${_qt5Core_install_prefix}/bin/qmake")
+    set(imported_location "/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/build/3rdparty/qt5-staging/host/bin/qmake")
     _qt5_Core_check_file_exists(${imported_location})
 
     set_target_properties(Qt5::qmake PROPERTIES
@@ -13,7 +13,7 @@ endif()
 if (NOT TARGET Qt5::moc)
     add_executable(Qt5::moc IMPORTED)
 
-    set(imported_location "${_qt5Core_install_prefix}/bin/moc")
+    set(imported_location "/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/build/3rdparty/qt5-staging/host/bin/moc")
     _qt5_Core_check_file_exists(${imported_location})
 
     set_target_properties(Qt5::moc PROPERTIES
@@ -26,7 +26,7 @@ endif()
 if (NOT TARGET Qt5::rcc)
     add_executable(Qt5::rcc IMPORTED)
 
-    set(imported_location "${_qt5Core_install_prefix}/bin/rcc")
+    set(imported_location "/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/build/3rdparty/qt5-staging/host/bin/rcc")
     _qt5_Core_check_file_exists(${imported_location})
 
     set_target_properties(Qt5::rcc PROPERTIES

@@ -1,0 +1,13 @@
+prefix=/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/build/3rdparty/qt5-staging/usr/local/qt5
+exec_prefix=${prefix}
+libdir=${prefix}/lib
+includedir=${prefix}/include
+
+
+Name: Qt5 MultimediaWidgets
+Description: Qt MultimediaWidgets module
+Version: 5.12.9
+Libs: -L${libdir} -lQt5MultimediaWidgets 
+Cflags: -DQT_MULTIMEDIAWIDGETS_LIB -I${includedir}/QtMultimediaWidgets -I${includedir}
+Requires: Qt5Core Qt5Gui Qt5Multimedia Qt5Widgets
+

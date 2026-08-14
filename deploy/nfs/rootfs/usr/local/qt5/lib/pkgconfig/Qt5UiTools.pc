@@ -1,0 +1,14 @@
+prefix=/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/build/3rdparty/qt5-staging/usr/local/qt5
+exec_prefix=${prefix}
+libdir=${prefix}/lib
+includedir=${prefix}/include
+
+
+Name: Qt5 UiTools
+Description: Qt UiTools module
+Version: 5.12.9
+Libs: -L${libdir} -lQt5UiTools 
+Libs.private: /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/build/3rdparty/qt5-staging/usr/local/qt5/lib/libQt5Widgets.so /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/build/3rdparty/qt5-staging/usr/local/qt5/lib/libQt5Gui.so /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/build/3rdparty/qt5-staging/usr/local/qt5/lib/libQt5Core.so -lpthread /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/build/3rdparty/qt5-staging/usr/local/qt5/lib/libQt5Widgets.so /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/build/3rdparty/qt5-staging/usr/local/qt5/lib/libQt5Gui.so /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/build/3rdparty/qt5-staging/usr/local/qt5/lib/libQt5Core.so   
+Cflags: -DQT_UITOOLS_LIB -I${includedir}/QtUiTools -I${includedir}
+Requires: Qt5Core Qt5Gui Qt5Widgets
+

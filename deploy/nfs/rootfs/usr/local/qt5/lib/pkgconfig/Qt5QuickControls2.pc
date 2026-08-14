@@ -1,0 +1,13 @@
+prefix=/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/build/3rdparty/qt5-staging/usr/local/qt5
+exec_prefix=${prefix}
+libdir=${prefix}/lib
+includedir=${prefix}/include
+
+
+Name: Qt5 QuickControls2
+Description: Qt QuickControls2 module
+Version: 5.12.9
+Libs: -L${libdir} -lQt5QuickControls2 
+Cflags: -DQT_QUICKCONTROLS2_LIB -I${includedir}/QtQuickControls2 -I${includedir}
+Requires: Qt5Core Qt5Gui Qt5Quick
+

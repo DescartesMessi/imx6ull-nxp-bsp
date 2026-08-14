@@ -25,4 +25,4 @@ dlopen=''
 dlpreopen=''
 
 # Directory that this library needs to be installed in:
-libdir='=/usr/local/qt5/lib'
+libdir='=/home/pointer/imx6ull/projects/imx6ull-nxp-bsp/build/3rdparty/qt5-staging/usr/local/qt5/lib'

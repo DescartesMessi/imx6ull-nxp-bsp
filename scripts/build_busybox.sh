@@ -1,5 +1,6 @@
 #!/bin/bash
-
+# 编译出 ARM BusyBox, /bin /sbin /usr/bin /usr/sbin
+# 交叉编译 BusyBox，并把 BusyBox 提供的 Linux 用户空间命令安装到 RootFS 中。
 ###############################################################################
 # File       : build_busybox.sh
 # Author     : Pointer
