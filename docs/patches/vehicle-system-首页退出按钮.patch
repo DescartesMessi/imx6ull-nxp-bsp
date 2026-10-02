@@ -1,0 +1,178 @@
+首页"退出程序"按钮改动（对应 docs/代码优化记录.md ⑯）
+
+目标工程：Vehicle-system（app/ 目录）
+应用方式：cd Vehicle-system && patch -p0 < 本文件
+说明：本补丁只包含 4 个源文件的改动（HomePage.h/.cpp、MainWindow.h/.cpp），
+      不含编译产物；改动已同步写入实际工程目录。
+
+--- app/pages/home/HomePage.h	2026-08-15 10:49:03.859583340 +0800
++++ app/pages/home/HomePage.h	2026-10-01 21:24:05.528172610 +0800
+@@ -25,6 +25,7 @@
+     void sentinelRequested();
+     void diagnosticRequested();
+     void cameraRequested();
++    void exitRequested();
+ 
+ protected:
+     void showEvent(QShowEvent *event) override;
+@@ -53,4 +54,4 @@
+     QTimer *m_environmentTimer;
+ };
+ 
+-#endif
+\ 文件尾没有换行符
++#endif
+--- app/pages/home/HomePage.cpp	2026-08-17 15:13:39.636853173 +0800
++++ app/pages/home/HomePage.cpp	2026-10-01 21:24:05.616179960 +0800
+@@ -140,6 +140,49 @@
+         Qt::ToolButtonTextBesideIcon);
+     cameraButton->setFixedHeight(58);
+ 
++    /*
++     * 退出程序按钮：紧挨摄像头按钮放在同一行。
++     * 单独用红色描边区分，避免和普通功能入口混淆；
++     * 实际退出动作由 MainWindow 处理（带一次确认），
++     * HomePage 只负责发出 exitRequested() 信号。
++     */
++    QToolButton *exitButton = new QToolButton(this);
++    exitButton->setObjectName(QStringLiteral("homeExitButton"));
++    exitButton->setText(QStringLiteral("退出"));
++    exitButton->setIcon(
++        style()->standardIcon(QStyle::SP_DialogCloseButton));
++    exitButton->setIconSize(QSize(34, 34));
++    exitButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
++    exitButton->setFixedHeight(58);
++    exitButton->setFixedWidth(104);
++    exitButton->setStyleSheet(
++        "QToolButton#homeExitButton {"
++        "    background-color: #fff5f5;"
++        "    border: 2px solid #f0b8b8;"
++        "    border-radius: 18px;"
++        "    color: #c62828;"
++        "    font-size: 19px;"
++        "    font-weight: bold;"
++        "    padding: 8px;"
++        "}"
++        "QToolButton#homeExitButton:hover {"
++        "    background-color: #ffe3e3;"
++        "    border: 2px solid #e05252;"
++        "}"
++        "QToolButton#homeExitButton:pressed {"
++        "    background-color: #ffc9c9;"
++        "}"
++    );
++
++    QWidget *cameraRow = new QWidget(this);
++
++    QHBoxLayout *cameraRowLayout = new QHBoxLayout(cameraRow);
++
++    cameraRowLayout->setContentsMargins(0, 0, 0, 0);
++    cameraRowLayout->setSpacing(10);
++    cameraRowLayout->addWidget(cameraButton, 1);
++    cameraRowLayout->addWidget(exitButton, 0);
++
+     QWidget *leftTopPanel = new QWidget(this);
+ 
+     QVBoxLayout *leftTopLayout =
+@@ -149,7 +192,7 @@
+     leftTopLayout->setSpacing(10);
+     leftTopLayout->addWidget(timePanel);
+     leftTopLayout->addWidget(environmentPanel);
+-    leftTopLayout->addWidget(cameraButton);
++    leftTopLayout->addWidget(cameraRow);
+     leftTopLayout->addStretch();
+ 
+     QToolButton *musicButton = createEntryButton(
+@@ -246,6 +289,13 @@
+         emit cameraRequested();
+     });
+ 
++    connect(exitButton,
++            &QToolButton::clicked,
++            this,
++            [this]() {
++        emit exitRequested();
++    });
++
+     connect(m_clockTimer,
+             &QTimer::timeout,
+             this,
+@@ -407,4 +457,4 @@
+     m_statusLabel->setText(
+         QStringLiteral(
+             "系统状态：正常    DHT11：已连接"));
+-}
+\ 文件尾没有换行符
++}
+--- app/MainWindow.h	2026-08-17 15:11:56.577827439 +0800
++++ app/MainWindow.h	2026-10-01 21:24:05.708187644 +0800
+@@ -26,6 +26,7 @@
+     void showCameraPage();
+     void showSentinelPage();
+     void showReversePage();
++    void handleExitRequested();
+ 
+     void ensureAudioPage();
+     void ensureVideoPage();
+@@ -49,4 +50,4 @@
+     ReversePage *m_reversePage;
+ };
+ 
+-#endif
+\ 文件尾没有换行符
++#endif
+--- app/MainWindow.cpp	2026-08-17 15:21:09.881542597 +0800
++++ app/MainWindow.cpp	2026-10-01 21:24:05.788194326 +0800
+@@ -9,6 +9,9 @@
+ #include "pages/video/VideoPage.h"
+ 
+ #include <QStackedWidget>
++#include <QApplication>
++#include <QMessageBox>
++#include <QPushButton>
+ 
+ MainWindow::MainWindow(const QString &musicDirectory,
+                        const QString &videoDirectory,
+@@ -50,6 +53,35 @@
+     connect(m_homePage, &HomePage::sentinelRequested, this, &MainWindow::showSentinelPage);
+ 
+     connect(m_homePage, &HomePage::reverseRequested, this, &MainWindow::showReversePage);
++
++    connect(m_homePage, &HomePage::exitRequested, this, &MainWindow::handleExitRequested);
++}
++
++/*
++ * 首页"退出"按钮的处理：先弹一次确认框再退出。
++ *
++ * 触摸屏上误触一次就直接杀掉界面会让演示中断，且本程序退出后不会自动
++ * 拉起，因此这里保留一次确认；默认焦点给"取消"，避免回车直接退出。
++ */
++void MainWindow::handleExitRequested()
++{
++    QMessageBox box(this);
++
++    box.setWindowTitle(QStringLiteral("退出程序"));
++    box.setIcon(QMessageBox::Question);
++    box.setText(QStringLiteral("确定要退出车载终端程序吗？"));
++    box.setInformativeText(QStringLiteral("退出后界面会关闭，需要重新运行才能恢复。"));
++
++    QPushButton *confirmButton =
++        box.addButton(QStringLiteral("退出"), QMessageBox::AcceptRole);
++    QPushButton *cancelButton =
++        box.addButton(QStringLiteral("取消"), QMessageBox::RejectRole);
++
++    box.setDefaultButton(cancelButton);
++    box.exec();
++
++    if (box.clickedButton() == confirmButton)
++        qApp->quit();
+ }
+ 
+ void MainWindow::ensureAudioPage()
+@@ -176,4 +208,4 @@
+ {
+     ensureReversePage();
+     m_pages->setCurrentWidget(m_reversePage);
+-}
+\ 文件尾没有换行符
++}

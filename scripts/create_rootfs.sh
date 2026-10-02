@@ -14,7 +14,7 @@
 # 4. Generate basic system files
 #
 ###############################################################################
-set -u
+set -euo pipefail
 ###############################################################################
 # Environment
 ###############################################################################
@@ -100,7 +100,7 @@ ${ROOTFS_DIR}/usr/lib/ \
 log_info "Fix ld-linux-armhf.so.3"
 rm -f ${ROOTFS_DIR}/lib/ld-linux-armhf.so.3
 LD_SO=$(find ${SYSROOT} \
--name ld-linux-armhf.so.3 | head -n 1)
+-name ld-linux-armhf.so.3 -print -quit)
 
 if [ -z "${LD_SO}" ];then
 
@@ -147,7 +147,6 @@ echo "================================="
 mount -t proc proc /proc
 mount -t sysfs sysfs /sys
 echo /sbin/mdev > /proc/sys/kernel/hotplug
-mdev -s
 EOF
 chmod +x ${ROOTFS_DIR}/etc/init.d/rcS
 ###############################################################################

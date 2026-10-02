@@ -15,7 +15,7 @@
 #
 ###############################################################################
 
-set -u
+set -euo pipefail
 
 ###############################################################################
 # Environment
@@ -99,12 +99,10 @@ fi
 
 
 log_info "Configure Kernel..."
-make \
+if ! make \
 -C "${KERNEL_SOURCE}" \
 O="${KERNEL_BUILD}" \
-${BOARD_DEFCONFIG}
-
-if [ $? -ne 0 ]; then
+${BOARD_DEFCONFIG}; then
 
     die "Kernel configuration failed!"
 
@@ -115,16 +113,13 @@ log_info "Kernel configuration success!"
 # Build Kernel
 ###############################################################################
 log_info "Build Kernel..."
-make \
+if ! make \
 -C "${KERNEL_SOURCE}" \
 O="${KERNEL_BUILD}" \
 -j"$(nproc)" \
 zImage \
 ${DTB_NAME} \
-2>&1 | tee "${BUILD_LOG}"
-
-
-if [ ${PIPESTATUS[0]} -ne 0 ]; then
+2>&1 | tee "${BUILD_LOG}"; then
 
     die "Kernel build failed!"
 
@@ -213,7 +208,7 @@ echo ""
 
 echo "Deploy files:"
 
-ls -lh "${TFTP_DIR}" | grep -E "zImage|dtb"
+ls -lh "${TFTP_DIR}" | grep -E "zImage|dtb" || true
 
 
 

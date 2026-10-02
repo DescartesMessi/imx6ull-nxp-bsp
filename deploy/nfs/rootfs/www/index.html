@@ -1,54 +1,58 @@
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN"
-"http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
-  <head>
-    <title>MJPG-streamer</title>
-    <meta http-equiv="content-type" content="text/html; charset=iso-8859-1" />
-    <link rel="stylesheet" href="style.css" type="text/css" />
-    <!--[if IE 6]>
-    <link rel="stylesheet" href="fix.css" type="text/css" />
-    <![endif]-->
-  </head>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>i.MX6ULL 车载终端 · 远程监控</title>
+<style>
+  body { margin: 0; padding: 16px; font-family: system-ui, "Noto Sans CJK SC", sans-serif;
+         background: #101820; color: #e8f1f8; text-align: center; }
+  h1 { font-size: 20px; font-weight: 600; margin: 8px 0 16px; }
+  .card { display: inline-block; padding: 10px; background: #182734;
+          border: 1px solid #324b5e; border-radius: 12px; }
+  img { max-width: 100%; display: block; border-radius: 8px; background: #000;
+        min-width: 320px; min-height: 240px; }
+  button { margin: 14px 6px 0; padding: 10px 18px; font-size: 15px; color: #fff;
+           background: #1976a8; border: 0; border-radius: 8px; cursor: pointer; }
+  button:active { background: #1384bd; }
+  code { color: #70d6ff; }
+  .hint { color: #8fa6b8; font-size: 13px; line-height: 1.7; }
+</style>
+</head>
+<body>
+<h1>i.MX6ULL 智能车载终端 · 远程监控</h1>
 
-  <body>
-    <div id="sidebar">
-      <h1>MJPG-Streamer Demo Pages</h1>
-      <h2>a resource-friendly streaming application</h2>
+<div class="card">
+  <img id="stream" src="?action=stream" alt="等待视频流">
+</div>
 
-      <div id="menu">
-        <a class="active" href="index.html">Home</a>
-        <a href="static.html">Static</a>
-        <a href="stream.html">Stream</a>
-        <a href="java.html">Java</a>
-        <a href="javascript.html">Javascript</a>
-        <a href="videolan.html">VideoLAN</a>
-        <a target="_blank" onClick="window.open(this.href, '_blank'); return false;" href="control.htm">Control</a>
-      </div>
+<div>
+  <button onclick="reconnect()">重新连接</button>
+  <button onclick="snapshot()">抓一帧</button>
+</div>
 
-      <h3>Version info:</h3>
-      <p>v0.1 (Okt 22, 2007)</p>
-    </div>
+<p class="hint">
+  MJPEG 流：<code>http://192.168.31.50:8080/?action=stream</code><br>
+  单帧快照：<code>http://192.168.31.50:8080/?action=snapshot</code><br>
+  哨兵模式只在 SR501 检测到人后推流，无人 10 秒自动停止；<br>
+  页面打不开说明那一刻没有在推流，重新挥手触发或改用常开推流。
+</p>
 
-    <div id="content">
-      <h1>About</h1>
-      <h2>Details about the M-JPEG streamer</h2>
+<script>
+  const img = document.getElementById('stream');
 
-      <h3>Congratulations</h3>
-      <p>You sucessfully managed to install this streaming webserver. If you can see this page, you can also access the stream of JPGs, which can originate from your webcam for example. This installation consists of these example pages and you may customize the look and content.</p>
+  function reconnect() {
+    img.src = '?action=stream&t=' + Date.now();
+  }
 
-      <img src="example.jpg" width="512" height="160" alt="just an image" />
-      <p>The reason for developing this software was the need of a simple and ressource friendly streaming application for Linux-UVC compatible webcams. The predecessor <i>uvc-streamer</i> is working well, but i wanted to implement a few more ideas. For instance, plugins can be used to process the images. One input plugin copies images to a global variable, multiple output plugins can access those images. For example this webpage is served by the <i>output_http.so</i> plugin.</p>
+  function snapshot() {
+    img.src = '?action=snapshot&t=' + Date.now();
+  }
 
-      <a href="static.html"><img src="./?action=snapshot" width="170" height="128" alt="static image example" /></a>
-      <p>The image displayed here was grabbed by the input plugin. The HTTP request contains the GET parameters <i>action=snapshot</i>. This requests one single picture from the image-input. To display another example, just click on the picture.</p>
-
-      <h3>About the examples</h3>
-      <p>To view the stream with any browser you may try the <i>javascript</i> or <i>java</i> subpages. Firefox is able to display the M-JPEG-stream directly.</p>
-
-      <h3>About this server</h3>
-      <p>This server is running a software written for the MJPG-streamer project. The MJPG-streamer developers can not be made responsible for installations of this software.</p>
-
-      <p>&copy; The <a href="http://mjpg-streamer.sf.net">MJPG-streamer team</a> | Design by <a href="http://andreasviklund.com">Andreas Viklund</a></p>
-    </div>
-  </body>
+  /* 流断开（触发结束/应用停流）时自动重试，便于观察下一次触发 */
+  img.onerror = function () {
+    setTimeout(reconnect, 2000);
+  };
+</script>
+</body>
 </html>

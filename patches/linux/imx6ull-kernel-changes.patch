@@ -1,0 +1,2808 @@
+diff --git a/arch/arm/boot/dts/imx6ull-alientek-jjl.dts b/arch/arm/boot/dts/imx6ull-alientek-jjl.dts
+index b14cad08..6d5a2397 100644
+--- a/arch/arm/boot/dts/imx6ull-alientek-jjl.dts
++++ b/arch/arm/boot/dts/imx6ull-alientek-jjl.dts
+@@ -258,18 +258,23 @@
+ 				>;
+ 	phy-mode = "rmii";
+ 	phy-handle = <&ethphy0>;
++	/* 网口 MAC 由设备树指定（本节点 = ethernet@02188000，Linux 下为 eth1） */
++	local-mac-address = [b8 ae 1d 00 00 01];
+ 	phy-reset-gpios = <&gpio5 7 GPIO_ACTIVE_LOW>;
+-	phy-reset-duration = <200>;
++	/*
++	 * PHY 硬件复位脉冲宽度。SR8201F 要求 RESET# 至少保持 10ms，
++	 * 这里取 20ms 留一倍余量。原来写 200ms，导致每个网口 probe 时
++	 * 白等 180ms（驱动还会在释放后再固定延时 200ms），两口合计多花 0.36s。
++	 */
++	phy-reset-duration = <20>;
+ 	status = "okay";
+-
+-	mdio{
+-		#address-cells = <1>;
+-		#size-cells = <0>;
+-		ethphy0: ethernet-phy@1 {
+-			compatible = "ethernet-phy-ieee802.3-c22";
+-			reg = <1>;
+-		};
+-	};
++	/*
++	 * 本节点是 ENET1（ethernet@02188000）。本板 ENET1 与 ENET2 硬件上共用
++	 * ENET_MDIO / ENET_MDC（GPIO1_IO06 / GPIO1_IO07），MDIO 由 ENET2 驱动：
++	 * FEC 驱动按探测顺序分配 dev_id，只有 dev_id 0 的那一路会注册 MDIO 总线，
++	 * 而 dtsi 中 ENET2（ethernet@020b4000，即下面的 &fec2）节点更靠前、先探测，
++	 * 所以两个 PHY 统一声明在 &fec2 的 mdio 子节点里，本节点不再声明。
++	 */
+ };
+ 
+ &fec2 {
+@@ -279,20 +284,43 @@
+ 				>;
+ 	phy-mode = "rmii";
+ 	phy-handle = <&ethphy1>;
++	/* 网口 MAC 由设备树指定（本节点 = ethernet@020b4000，Linux 下为 eth0） */
++	local-mac-address = [b8 ae 1d 00 00 00];
+ 	phy-reset-gpios = <&gpio5 8 GPIO_ACTIVE_LOW>;
+-	phy-reset-duration = <200>;
++	phy-reset-duration = <20>;   /* 同上，SR8201F 复位脉冲 ≥10ms */
+ 	status = "okay";
+ 
++	/* 共用 MDIO 总线：两个 PHY 都声明在这里（详见 &fec1 处注释） */
+ 	mdio {
+ 		#address-cells = <1>;
+ 		#size-cells = <0>;
+-		ethphy1: ethernet-phy@1{
++		ethphy1: ethernet-phy@1 {
+ 			compatible = "ethernet-phy-ieee802.3-c22";
+ 			reg = <1>;
+ 		};
++
++		/* ENET2 侧 PHY：实测 MDIO 地址为 0 */
++		ethphy0: ethernet-phy@0 {
++			compatible = "ethernet-phy-ieee802.3-c22";
++			reg = <0>;
++		};
+ 	};
+ };
+ 
++/*
++ * 删除 imx6ull.dtsi 中的 ethernet0 / ethernet1 别名。
++ * U-Boot 的 fdt_fixup_ethernet() 会按这些别名把环境变量 ethaddr / ethNaddr
++ * 写回 local-mac-address，从而覆盖设备树里指定的 MAC。
++ * 注意：别名按硬件编号 ethernet0=ENET1(0x02188000)、ethernet1=ENET2(0x020b4000)，
++ * 而 Linux 的 eth0/eth1 是按探测顺序命名（ENET2→eth0、ENET1→eth1），
++ * 两套编号并不对应，所以 U-Boot 的 ethaddr 实际会落到 Linux 的 eth1 上。
++ * 去掉别名后 U-Boot 不再改写，MAC 完全由设备树决定。
++ */
++&{/aliases} {
++	/delete-property/ ethernet0;
++	/delete-property/ ethernet1;
++};
++
+ &flexcan1 {
+ 	pinctrl-names = "default";
+ 	pinctrl-0 = <&pinctrl_flexcan1>;
+@@ -301,10 +329,14 @@
+ };
+ 
+ &flexcan2 {
+-	pinctrl-names = "default";
+-	pinctrl-0 = <&pinctrl_flexcan2>;
+ 	xceiver-supply = <&reg_can_3v3>;
+-	status = "okay";
++	/*
++	 * 本板不接出 CAN2：FLEXCAN2 的候选引脚（UART2_RTS_B/CTS_B、ENET1_RX_EN/
++	 * TX_DATA0、LCD_DATA10/11、SD1_DATA2/3）在本板上已分别被 ICM20608 的
++	 * ECSPI3、以太网、LCD、SD 卡占用，没有引脚可用。
++	 * 保持 disabled 以免出现一个无法工作的 can1 接口。
++	 */
++	status = "disabled";
+ };
+ 
+ &gpc {
+@@ -504,13 +536,6 @@
+ 			>;
+ 		};
+ 
+-		pinctrl_flexcan2: flexcan2grp{
+-			fsl,pins = <
+-/* 				MX6UL_PAD_UART2_RTS_B__FLEXCAN2_RX	0x1b020
+-				MX6UL_PAD_UART2_CTS_B__FLEXCAN2_TX	0x1b020 */
+-			>;
+-		};
+-
+ 		pinctrl_i2c1: i2c1grp {
+ 			fsl,pins = <
+ 				MX6UL_PAD_UART4_TX_DATA__I2C1_SCL 0x4001b8b0
+@@ -622,6 +647,18 @@
+ 			>;
+ 		};
+ 
++		/*
++		 * UART3：板上的 RS232（SP3232，经 JP1 跳线 1-3/2-4 接入）、
++		 * RS485（SP3485，RE/DE 由 RS485_RX 自动方向控制，无需方向 IO）
++		 * 与 GPS 接口都接在这一路，按普通串口配置即可。
++		 */
++		pinctrl_uart3: uart3grp {
++			fsl,pins = <
++				MX6UL_PAD_UART3_TX_DATA__UART3_DCE_TX	0x1b0b1
++				MX6UL_PAD_UART3_RX_DATA__UART3_DCE_RX	0x1b0b1
++			>;
++		};
++
+ 		pinctrl_usdhc1: usdhc1grp {
+ 			fsl,pins = <
+ 				MX6UL_PAD_SD1_CMD__USDHC1_CMD     0x17059
+@@ -748,13 +785,6 @@
+                         >;
+                 };
+ 		
+-		pinctrl_lcdif_reset: lcdifresetgrp {
+-                        fsl,pins = <
+-                                /* used for lcd reset */
+-                                /* MX6ULL_PAD_SNVS_TAMPER9__GPIO5_IO09  0x79 */
+-                        >;
+-                };
+-
+ 		pinctrl_spi4: spi4grp {
+                         fsl,pins = <
+                                 MX6ULL_PAD_BOOT_MODE0__GPIO5_IO10        0x70a1
+@@ -792,7 +822,7 @@
+ 	display = <&display0>;
+ 	status = "okay";
+ 
+-	display0: display {
++	display0: panel {
+ 		bits-per-pixel = <24>;
+ 		bus-width = <24>;
+ 
+@@ -830,7 +860,7 @@
+ &qspi {
+ 	pinctrl-names = "default";
+ 	pinctrl-0 = <&pinctrl_qspi>;
+-	status = "okay";
++	status = "disabled";
+ 	ddrsmp=<0>;
+ 
+ 	flash0: n25q256a@0 {
+@@ -870,12 +900,24 @@
+ };
+ 
+ &uart2 {
++	/*
++	 * 本板不使用 UART2：它的数据引脚 UART2_TX_DATA / UART2_RX_DATA
++	 * 已被 ICM20608 的 ECSPI3（SCLK/MOSI/MISO）与片选 GPIO1_IO20 占用。
++	 * 原配置把 UART3 的数据引脚借给 UART2 当 RTS/CTS，属于错误映射，
++	 * 会让真正的 UART3 无法使用，故关闭 UART2、把引脚还给 UART3。
++	 */
++	status = "disabled";
++};
++
++/*
++ * UART3：RS232 / RS485 / GPS 三个接口共用这一路（详见 pinctrl_uart3 处注释）。
++ * 驱动侧表现为 /dev/ttymxc2。
++ * 注意：UART3 的 CTS/RTS 两个引脚在本板另作 FlexCAN1 的 RX/TX，
++ * 所以这里只申请数据引脚 TX/RX，两者不冲突。
++ */
++&uart3 {
+ 	pinctrl-names = "default";
+-	pinctrl-0 = <&pinctrl_uart2>;
+-	fsl,uart-has-rtscts;
+-	/* for DTE mode, add below change */
+-	/* fsl,dte-mode; */
+-	/* pinctrl-0 = <&pinctrl_uart2dte>; */
++	pinctrl-0 = <&pinctrl_uart3>;
+ 	status = "okay";
+ };
+ 
+diff --git a/arch/arm/configs/imx6ull_alientek_jjl_defconfig b/arch/arm/configs/imx6ull_alientek_jjl_defconfig
+index 943fa739..afbc1e0e 100644
+--- a/arch/arm/configs/imx6ull_alientek_jjl_defconfig
++++ b/arch/arm/configs/imx6ull_alientek_jjl_defconfig
+@@ -6,16 +6,16 @@ CONFIG_HIGH_RES_TIMERS=y
+ CONFIG_LOG_BUF_SHIFT=18
+ CONFIG_CGROUPS=y
+ CONFIG_RELAY=y
+-CONFIG_BLK_DEV_INITRD=y
++# CONFIG_BLK_DEV_INITRD is not set
+ CONFIG_EXPERT=y
+-CONFIG_KALLSYMS_ALL=y
+-CONFIG_PERF_EVENTS=y
++# CONFIG_KALLSYMS_ALL is not set
++# CONFIG_PERF_EVENTS is not set
+ # CONFIG_SLUB_DEBUG is not set
+ # CONFIG_COMPAT_BRK is not set
+ CONFIG_MODULES=y
+ CONFIG_MODULE_UNLOAD=y
+ CONFIG_MODVERSIONS=y
+-CONFIG_MODULE_SRCVERSION_ALL=y
++# CONFIG_MODULE_SRCVERSION_ALL is not set
+ # CONFIG_BLK_DEV_BSG is not set
+ # CONFIG_ARCH_MULTI_V6=y
+ CONFIG_ARCH_MULTI_V7=y
+@@ -50,14 +50,14 @@ CONFIG_CPU_IDLE=y
+ CONFIG_VFP=y
+ CONFIG_NEON=y
+ CONFIG_BINFMT_MISC=m
+-CONFIG_PM_DEBUG=y
+-CONFIG_PM_TEST_SUSPEND=y
++# CONFIG_PM_DEBUG is not set
++# CONFIG_PM_TEST_SUSPEND is not set
+ CONFIG_NET=y
+ CONFIG_PACKET=y
+ CONFIG_UNIX=y
+ CONFIG_INET=y
+ CONFIG_IP_PNP=y
+-CONFIG_IP_PNP_DHCP=y
++# CONFIG_IP_PNP_DHCP is not set
+ # CONFIG_INET_XFRM_MODE_TRANSPORT is not set
+ # CONFIG_INET_XFRM_MODE_TUNNEL is not set
+ # CONFIG_INET_XFRM_MODE_BEET is not set
+@@ -124,6 +124,14 @@ CONFIG_SMC911X=y
+ CONFIG_SMSC911X=y
+ # CONFIG_NET_VENDOR_STMICRO is not set
+ CONFIG_AT803X_PHY=y
++CONFIG_REALTEK_PHY=y
++#
++# CAN bus subsystem and FlexCAN controller
++#
++CONFIG_CAN=y
++CONFIG_CAN_RAW=y
++CONFIG_CAN_DEV=y
++CONFIG_CAN_FLEXCAN=y
+ CONFIG_BRCMFMAC=m
+ # CONFIG_INPUT_MOUSEDEV_PSAUX is not set
+ CONFIG_INPUT=y
+@@ -221,9 +229,9 @@ CONFIG_CONSOLE_TRANSLATIONS=y
+ CONFIG_VT_CONSOLE=y
+ CONFIG_VT_HW_CONSOLE_BINDING=y
+ 
+-CONFIG_FRAMEBUFFER_CONSOLE=y
+-CONFIG_FRAMEBUFFER_CONSOLE_DETECT_PRIMARY=y
+-CONFIG_LOGO=y
++# CONFIG_FRAMEBUFFER_CONSOLE is not set
++# CONFIG_FRAMEBUFFER_CONSOLE_DETECT_PRIMARY is not set
++# CONFIG_LOGO is not set
+ CONFIG_SOUND=y
+ CONFIG_SND=y
+ CONFIG_SND_PCM=y
+@@ -243,13 +251,56 @@ CONFIG_USB=y
+ CONFIG_USB_EHCI_HCD=y
+ CONFIG_USB_EHCI_MXC=y
+ CONFIG_USB_STORAGE=y
++CONFIG_USB_ACM=y
+ CONFIG_USB_CHIPIDEA=y
+ CONFIG_USB_CHIPIDEA_UDC=y
+ CONFIG_USB_CHIPIDEA_HOST=y
+ CONFIG_NOP_USB_XCEIV=y
+ CONFIG_USB_MXS_PHY=y
+ CONFIG_USB_GADGET=y
+-CONFIG_USB_MASS_STORAGE=y
++#
++# USB Gadget：改用 configfs 按需配置（串口 / 大容量存储 / ECM），
++# 替代编译期内建的 g_mass_storage——它没有 backing file，
++# 每次启动都会报 "failed to start g_mass_storage: -22"。
++#
++CONFIG_USB_CONFIGFS=y
++CONFIG_USB_CONFIGFS_SERIAL=y
++CONFIG_USB_CONFIGFS_ACM=y
++CONFIG_USB_CONFIGFS_ECM=y
++CONFIG_USB_CONFIGFS_MASS_STORAGE=y
++# CONFIG_USB_MASS_STORAGE is not set
++#
++# USB 转串口适配器（CH340/CH341、CP210x、FTDI、PL2303）
++#
++CONFIG_USB_SERIAL=y
++CONFIG_USB_SERIAL_GENERIC=y
++CONFIG_USB_SERIAL_CH341=y
++CONFIG_USB_SERIAL_CP210X=y
++CONFIG_USB_SERIAL_FTDI_SIO=y
++CONFIG_USB_SERIAL_PL2303=y
++#
++# USB 网卡
++#
++CONFIG_USB_USBNET=y
++CONFIG_USB_NET_AX8817X=y
++CONFIG_USB_NET_CDCETHER=y
++CONFIG_USB_NET_CDC_NCM=y
++CONFIG_USB_NET_CDC_MBIM=y
++CONFIG_USB_NET_RNDIS_HOST=y
++#
++# 4G/LTE 模块（HUB_DP4/DM4 那一路）：
++# AT 口走 usb_wwan + option 驱动，数据口可能是 QMI / NCM / MBIM / RNDIS
++#
++CONFIG_USB_WDM=y
++CONFIG_USB_SERIAL_WWAN=y
++CONFIG_USB_SERIAL_OPTION=y
++CONFIG_USB_NET_QMI_WWAN=y
++#
++# 输入设备：本板 LCD 为 800x480，mousedev 的坐标基准要与之匹配
++# （默认值是 1024x768，会让 /dev/input/mouseX 的指针缩放不对）
++#
++CONFIG_INPUT_MOUSEDEV_SCREEN_X=800
++CONFIG_INPUT_MOUSEDEV_SCREEN_Y=480
+ CONFIG_FSL_UTP=y
+ CONFIG_MMC=y
+ CONFIG_MMC_BLOCK_MINORS=16
+@@ -315,8 +366,8 @@ CONFIG_NLS_ASCII=y
+ CONFIG_NLS_ISO8859_1=y
+ CONFIG_NLS_ISO8859_15=m
+ CONFIG_NLS_UTF8=y
+-CONFIG_DEBUG_FS=y
+-CONFIG_MAGIC_SYSRQ=y
++# CONFIG_DEBUG_FS is not set
++# CONFIG_MAGIC_SYSRQ is not set
+ # CONFIG_SCHED_DEBUG is not set
+ # CONFIG_DEBUG_BUGVERBOSE is not set
+ # CONFIG_FTRACE is not set
+@@ -327,9 +378,9 @@ CONFIG_CRC_CCITT=m
+ CONFIG_CRC_T10DIF=y
+ CONFIG_CRC7=m
+ CONFIG_LIBCRC32C=m
+-CONFIG_FONTS=y
+-CONFIG_FONT_8x8=y
+-CONFIG_FONT_8x16=y
++# CONFIG_FONTS is not set
++# CONFIG_FONT_8x8 is not set
++# CONFIG_FONT_8x16 is not set
+ 
+ 
+ CONFIG_VEHICLE_SMARTHOME_DRIVERS=y
+@@ -340,4 +391,4 @@ CONFIG_VEHICLE_ICM20608=y
+ CONFIG_VEHICLE_LITEON_AP3216C=y
+ CONFIG_VEHICLE_BEEP=y
+ CONFIG_VEHICLE_SR04=y
+-CONFIG_VEHICLE_SR501=y
+\ No newline at end of file
++CONFIG_VEHICLE_SR501=y
+diff --git a/drivers/net/phy/realtek.c b/drivers/net/phy/realtek.c
+index 96a0f0fa..6a60cc78 100644
+--- a/drivers/net/phy/realtek.c
++++ b/drivers/net/phy/realtek.c
+@@ -74,6 +74,15 @@ static struct phy_driver realtek_drvs[] = {
+ 		.config_aneg    = &genphy_config_aneg,
+ 		.read_status    = &genphy_read_status,
+ 		.driver         = { .owner = THIS_MODULE,},
++	}, {
++		.phy_id		= 0x001cc816,
++		.name		= "RTL8201F 10/100 Ethernet",
++		.phy_id_mask	= 0x001fffff,
++		.features	= PHY_BASIC_FEATURES,
++		.flags		= PHY_HAS_INTERRUPT,
++		.config_aneg	= &genphy_config_aneg,
++		.read_status	= &genphy_read_status,
++		.driver		= { .owner = THIS_MODULE,},
+ 	}, {
+ 		.phy_id		= 0x001cc912,
+ 		.name		= "RTL8211B Gigabit Ethernet",
+@@ -104,6 +113,7 @@ static struct phy_driver realtek_drvs[] = {
+ module_phy_driver(realtek_drvs);
+ 
+ static struct mdio_device_id __maybe_unused realtek_tbl[] = {
++	{ 0x001cc816, 0x001fffff },
+ 	{ 0x001cc912, 0x001fffff },
+ 	{ 0x001cc915, 0x001fffff },
+ 	{ }
+diff --git a/drivers/smarthome/back_key_driver.c b/drivers/smarthome/back_key_driver.c
+index 4ef96b53..24be4e49 100644
+--- a/drivers/smarthome/back_key_driver.c
++++ b/drivers/smarthome/back_key_driver.c
+@@ -36,16 +36,18 @@ struct back_key_device {
+     int irq;
+     struct input_dev *input;
+     unsigned int keycode;
++
+     unsigned int debounce_ms;
+     struct timer_list debounce_timer;
+     struct work_struct report_work;
++
+     bool last_state;
+     bool wakeup_enabled;/* 是否允许该按键唤醒系统 */
+     bool irq_wake_enabled;/* 当前 IRQ 是否已经设置为唤醒源 */
+ };
+ 
+ /* ============================================================
+- * Workqueue
++ * Workqueue，是真正完成按键判断的地方
+  * ============================================================
+  */
+ 
+@@ -79,7 +81,7 @@ static void back_key_report_work(struct work_struct *work)
+ }
+ 
+ /* ============================================================
+- * Timer
++ *  定时器时间到了执行这个函数，负责调度workqueue
+  * ============================================================
+  */
+ 
+@@ -95,7 +97,7 @@ static void back_key_timer_function(unsigned long data)
+ }
+ 
+ /* ============================================================
+- * IRQ handler
++ * 上半部的中断处理函数，定时20ms消抖
+  * ============================================================
+  */
+ 
+@@ -342,6 +344,4 @@ static struct platform_driver back_key_driver = {
+ module_platform_driver(back_key_driver);
+ MODULE_LICENSE("GPL v2");
+ MODULE_AUTHOR("JJL");
+-MODULE_DESCRIPTION(
+-    "i.MX6ULL GPIO Back Key Input Driver with Wakeup Support"
+-);
+\ No newline at end of file
++MODULE_DESCRIPTION("i.MX6ULL GPIO Back Key Input Driver with Wakeup Support");
+\ No newline at end of file
+diff --git a/drivers/smarthome/dht11.c b/drivers/smarthome/dht11.c
+index 95052927..60904e87 100644
+--- a/drivers/smarthome/dht11.c
++++ b/drivers/smarthome/dht11.c
+@@ -12,6 +12,7 @@
+ #include <linux/string.h>
+ #include <linux/uaccess.h>
+ #include <linux/delay.h>
++#include <linux/jiffies.h>
+ #include <linux/smarthome_dht11.h>
+ 
+ #define DHT11_DEVICE_NAME "dht11"
+@@ -24,6 +25,13 @@
+ #define DHT11_DATA_BITS 40
+ #define DHT11_DATA_BYTES 5
+ 
++/*
++ * DHT11 数据手册要求采样间隔不小于 1 秒。
++ * 读得太快不会报错，而是重复返回上一次的旧值，属于“看起来正常但不正确”的失效，
++ * 因此驱动层必须自己守住这个约束。
++ */
++#define DHT11_MIN_INTERVAL_MS 1000
++
+ struct dht11_device {
+     dev_t devt;
+     struct cdev cdev;
+@@ -31,6 +39,7 @@ struct dht11_device {
+     struct device *device;
+     struct gpio_desc *data_gpio;
+     struct mutex lock;
++    unsigned long last_read;   /* 上次成功采样的 jiffies，用于限制采样频率 */
+ };
+ 
+ static int dht11_wait_level(struct dht11_device *dev,
+@@ -110,9 +119,15 @@ static int dht11_read_frame(struct dht11_device *dev, u8 data[5])
+         return ret;
+ 
+     /*
+-     * DHT11 的时序窗口很短。
+-     * 锁住当前进程，避免同一个设备被并发访问。
+-     * 不在这里关闭全局中断，避免影响系统其他设备。
++     * DHT11 一位数据的周期只有 26~70us，采样点在上升沿后 40us，
++     * 容差约 ±13us，任何一次中断处理都可能把这次采样带偏，
++     * 因此整帧读取期间必须关闭本地中断。
++     *
++     * 这里用 local_irq_save 而不是 local_irq_disable：
++     *  - 只关当前 CPU 的中断，SMP 下其他核不受影响；
++     *  - 保存并恢复中断状态，避免破坏调用者的上下文。
++     * 代价是约 2.8~4ms 的中断延迟，属于单总线器件必须付出的代价，
++     * 并发访问由上层 mutex（dev->lock）串行化。
+      */
+     local_irq_save(flags);
+ 
+@@ -155,15 +170,38 @@ static int dht11_measure(struct dht11_device *dev,
+     u8 checksum;
+     int ret;
+ 
++    /*
++     * 补足采样间隔：DHT11 读太快只会返回旧值，所以这里主动睡眠到满足
++     * 1 秒间隔再采样，保证每次返回的都是新数据，同时保持 read/ioctl 接口不变。
++     */
++    if (dev->last_read &&
++        time_before(jiffies, dev->last_read + msecs_to_jiffies(DHT11_MIN_INTERVAL_MS))) {
++        unsigned long delay =
++            dev->last_read + msecs_to_jiffies(DHT11_MIN_INTERVAL_MS) - jiffies;
++
++        if (msleep_interruptible(jiffies_to_msecs(delay)))
++            return -ERESTARTSYS;
++    }
++
+     ret = dht11_read_frame(dev, data);
+     if (ret)
+         return ret;
+ 
++    dev->last_read = jiffies;
++
+     checksum = data[0] + data[1] + data[2] + data[3];
+ 
+     if (checksum != data[4])
+         return -EBADMSG;
+ 
++    /*
++     * 全 0 帧（5 个字节都是 0）会让校验和“0 == 0”通过，是 DHT11
++     * 无响应或时序失败时最容易出现的假有效数据。DHT11 的湿度量程是
++     * 20~90%RH，0%RH 物理上不可能出现，据此判定为无效更可靠。
++     */
++    if (!(data[0] | data[1] | data[2] | data[3] | data[4]))
++        return -EIO;
++
+     memset(measurement, 0, sizeof(*measurement));
+ 
+     measurement->humidity_integer = data[0];
+@@ -393,4 +431,4 @@ module_platform_driver(dht11_driver);
+ 
+ MODULE_LICENSE("GPL");
+ MODULE_AUTHOR("smarthome");
+-MODULE_DESCRIPTION("DHT11 temperature and humidity driver");
+\ No newline at end of file
++MODULE_DESCRIPTION("DHT11 temperature and humidity driver");
+diff --git a/drivers/smarthome/gt9147.c b/drivers/smarthome/gt9147.c
+index 2a0b15de..ae977d34 100644
+--- a/drivers/smarthome/gt9147.c
++++ b/drivers/smarthome/gt9147.c
+@@ -3,618 +3,627 @@
+  * Goodix GT9147 touchscreen driver
+  *
+  * Target platform:
+- *   NXP i.MX6ULL
+- *   Linux 4.x
++ *   NXP i.MX6ULL  // 典型的 ARM 嵌入式开发板芯片
++ *   Linux 4.x     // 适用的内核版本（现代内核 API）
+  *
+  * Interface:
+- *   Linux input subsystem
+- *   /dev/input/eventX
++ *   Linux input subsystem // 逻辑层对接 Input 子系统
++ *   /dev/input/eventX     // 最终暴露给应用层的设备节点
+  */
+ 
+-#include <linux/bitops.h>
+-#include <linux/delay.h>
+-#include <linux/gpio.h>
+-#include <linux/i2c.h>
+-#include <linux/input.h>
+-#include <linux/input/mt.h>
+-#include <linux/interrupt.h>
+-#include <linux/kernel.h>
+-#include <linux/module.h>
+-#include <linux/of.h>
+-#include <linux/of_gpio.h>
+-#include <linux/slab.h>
+-
+-#define GT9147_DRIVER_NAME          "gt9147"
+-#define GT9147_INPUT_NAME           "gt9147-touchscreen"
+-
+-#define GT9147_REG_COMMAND          0x8040
+-#define GT9147_REG_CONFIG           0x8047
+-#define GT9147_REG_PRODUCT_ID       0x8140
+-#define GT9147_REG_STATUS           0x814e
+-#define GT9147_REG_POINTS           0x814f
+-
+-#define GT9147_STATUS_READY         BIT(7)
+-#define GT9147_STATUS_TOUCH_MASK    0x0f
+-
+-#define GT9147_POINT_SIZE           8
+-#define GT9147_MAX_TOUCHES          5
+-
+-#define GT9147_DEFAULT_WIDTH        800
+-#define GT9147_DEFAULT_HEIGHT       480
+-
++/* ---------------- 基础头文件区 ---------------- */
++#include <linux/bitops.h>      // 提供 BIT(x)、test_bit 等位操作宏
++#include <linux/delay.h>       // 提供 msleep、usleep_range 等延时休眠函数
++#include <linux/gpio/consumer.h> // 面向描述符的 GPIO 子系统 API（gpiod_* 系列）
++#include <linux/i2c.h>         // I2C 核心层 API（提供 i2c_client, i2c_transfer）
++#include <linux/input.h>       // Input 子系统核心头文件（提供 input_dev 等）
++#include <linux/input/mt.h>    // 多点触控（Multi-Touch）Type B 协议头文件
++#include <linux/interrupt.h>   // 中断子系统（提供 request_threaded_irq 等）
++#include <linux/kernel.h>      // 内核基础库（提供 printk, dev_err 等）
++#include <linux/module.h>      // 模块化宏定义（提供 MODULE_AUTHOR 等）
++#include <linux/of.h>          // 设备树（Device Tree）解析核心 API
++#include <linux/slab.h>        // 内存分配（提供 kmalloc, kfree）
++
++/* ---------------- 宏定义区 ---------------- */
++#define GT9147_DRIVER_NAME          "gt9147"               // 驱动名，用于设备树匹配及日志
++#define GT9147_INPUT_NAME           "gt9147-touchscreen"   // 注册进 Input 子系统后的设备名
++
++/* GT9147 芯片内部的关键寄存器地址（16位地址） */
++#define GT9147_REG_COMMAND          0x8040 // 命令寄存器（发软复位等）
++#define GT9147_REG_CONFIG           0x8047 // 配置寄存器起始地址（包含分辨率等）
++#define GT9147_REG_PRODUCT_ID       0x8140 // 产品 ID 寄存器（用于校验是否为 GT9147）
++#define GT9147_REG_STATUS           0x814e // 状态寄存器（非常关键：指明当前是否有触摸数据）
++#define GT9147_REG_POINTS           0x814f // 坐标数据缓冲区的起始地址
++
++/* 状态寄存器 (0x814e) 的位掩码解析 */
++#define GT9147_STATUS_READY         BIT(7) // 最高位(Bit 7)为 1 时，代表坐标数据已准备好
++#define GT9147_STATUS_TOUCH_MASK    0x0f   // 低 4 位代表当前屏幕上有几个手指按着 (0~5)
++
++#define GT9147_POINT_SIZE           8      // 芯片硬件规定：每一个手指的坐标数据占用 8 个字节
++#define GT9147_MAX_TOUCHES          5      // GT9147 硬件最多支持 5 点同时触控
++
++#define GT9147_DEFAULT_WIDTH        800    // 默认屏幕宽度像素（如果从芯片没读到）
++#define GT9147_DEFAULT_HEIGHT       480    // 默认屏幕高度像素
++
++/* ---------------- 核心私有数据结构 ---------------- */
++/*  驱动开发铁律：绝不使用全局变量！所有的状态和资源都必须封装在一个私有结构体中，以便支持多个同款设备同时挂载。*/
+ struct gt9147_ts {
+-	struct i2c_client *client;
+-	struct input_dev *input;
++    struct i2c_client *client; // 指向 I2C 物理层设备的指针（用于发数据）
++    struct input_dev *input;   // 指向 Input 逻辑层设备的指针（用于报坐标）
+ 
+-	int reset_gpio;
+-	int irq_gpio;
+-	int irq;
++    struct gpio_desc *reset_gpio; // 复位引脚的 GPIO 描述符
++    struct gpio_desc *irq_gpio;   // 中断引脚的 GPIO 描述符
++    int irq;                   // 映射后的 Linux 虚拟中断号 (virq)
+ 
+-	unsigned int size_x;
+-	unsigned int size_y;
+-	unsigned int max_touch_num;
+-	unsigned int irq_type;
++    unsigned int size_x;       // 屏幕 X 轴分辨率
++    unsigned int size_y;       // 屏幕 Y 轴分辨率
++    unsigned int max_touch_num;// 当前配置支持的最大触摸点数
++    unsigned int irq_type;     // 硬件配置的中断触发类型（上升沿/下降沿等）
+ 
+-	bool inverted_x;
+-	bool inverted_y;
+-	bool swapped_xy;
++    bool inverted_x;           // 是否需要将 X 轴坐标反转（镜像）
++    bool inverted_y;           // 是否需要将 Y 轴坐标反转（镜像）
++    bool swapped_xy;           // 是否需要交换 X 轴和 Y 轴（应对横屏/竖屏旋转）
+ };
+ 
+-static const unsigned long gt9147_irq_flags[] = {
+-	IRQF_TRIGGER_RISING,
+-	IRQF_TRIGGER_FALLING,
+-	IRQF_TRIGGER_LOW,
+-	IRQF_TRIGGER_HIGH,
+-};
++/* ---------------- I2C 底层通信函数 ---------------- */
+ 
+-static int gt9147_i2c_read(struct gt9147_ts *ts, u16 reg,
+-			   u8 *buffer, unsigned int length)
++/*
++ * 从 GT9147 芯片读取数据
++ * 注意：GT9147 的寄存器地址是 16 位的，所以必须发两次 Start 信号（I2C 的 Write-then-Read 机制）
++ */
++static int gt9147_i2c_read(struct gt9147_ts *ts, u16 reg,u8 *buffer, unsigned int length)
+ {
+-	struct i2c_msg messages[2];
+-	u8 address[2];
+-	int ret;
+-
+-	address[0] = reg >> 8;
+-	address[1] = reg & 0xff;
+-
+-	messages[0].addr = ts->client->addr;
+-	messages[0].flags = 0;
+-	messages[0].len = sizeof(address);
+-	messages[0].buf = address;
+-
+-	messages[1].addr = ts->client->addr;
+-	messages[1].flags = I2C_M_RD;
+-	messages[1].len = length;
+-	messages[1].buf = buffer;
+-
+-	ret = i2c_transfer(ts->client->adapter, messages, 2);
+-	if (ret == 2)
+-		return 0;
+-
+-	if (ret < 0)
+-		return ret;
+-
+-	return -EIO;
++    struct i2c_msg messages[2]; // 构建两个 I2C 消息体
++    u8 address[2];              // 用于存放拆分后的 16 位寄存器地址
++    int ret;
++
++    address[0] = reg >> 8;      // 寄存器地址高 8 位
++    address[1] = reg & 0xff;    // 寄存器地址低 8 位
++
++    /* 消息 1：写操作（通知芯片我要读哪个寄存器） */
++    messages[0].addr = ts->client->addr; // 设备地址
++    messages[0].flags = 0;               // 标志为 0 代表写方向 (Write)
++    messages[0].len = sizeof(address);   // 发送长度为 2 字节（即寄存器地址）
++    messages[0].buf = address;           // 数据内容指向 address 数组
++
++    /* 消息 2：读操作（紧接着读取芯片发回的数据） */
++    messages[1].addr = ts->client->addr; // 设备地址
++    messages[1].flags = I2C_M_RD;        // 标志 I2C_M_RD 代表读方向 (Read)
++    messages[1].len = length;            // 读取的字节数
++    messages[1].buf = buffer;            // 读回来的数据存放在 buffer 中
++
++    /* 将构建好的两个消息交给 I2C 核心层，由底层的硬件控制器去真正在总线上发出电平 */
++    ret = i2c_transfer(ts->client->adapter, messages, 2);
++    if (ret == 2)
++        return 0; // i2c_transfer 返回成功执行的消息个数，等于 2 说明全成功了
++
++    if (ret < 0)
++        return ret; // 返回底层错误码
++
++    return -EIO;    // 返回输入输出错误
+ }
+ 
++/* 
++ * 向 GT9147 芯片写入数据 
++ * 为了将 16位的寄存器地址 和 真正要写的数据 拼接成一个连续的缓冲区发出。
++ */
+ static int gt9147_i2c_write(struct gt9147_ts *ts, u16 reg,
+-			    const u8 *buffer, unsigned int length)
++                const u8 *buffer, unsigned int length)
+ {
+-	struct i2c_msg message;
+-	u8 *data;
+-	int ret;
++    struct i2c_msg message;
++    u8 *data;
++    int ret;
+ 
+-	data = kmalloc(length + 2, GFP_KERNEL);
+-	if (!data)
+-		return -ENOMEM;
++    /* 动态分配内存（寄存器地址2字节 + 实际数据长度）。因为在内核栈上分配大块内存不安全 */
++    data = kmalloc(length + 2, GFP_KERNEL); 
++    if (!data)
++        return -ENOMEM; // 内存不足
+ 
+-	data[0] = reg >> 8;
+-	data[1] = reg & 0xff;
++    data[0] = reg >> 8;         // 填充寄存器高 8 位
++    data[1] = reg & 0xff;       // 填充寄存器低 8 位
+ 
+-	if (length)
+-		memcpy(&data[2], buffer, length);
++    if (length)
++        memcpy(&data[2], buffer, length); // 拷贝要写入的实际数据追加在地址后面
+ 
+-	message.addr = ts->client->addr;
+-	message.flags = 0;
+-	message.len = length + 2;
+-	message.buf = data;
++    message.addr = ts->client->addr; // 设备地址
++    message.flags = 0;               // 写操作
++    message.len = length + 2;        // 总长度
++    message.buf = data;              // 拼接后的缓冲区
+ 
+-	ret = i2c_transfer(ts->client->adapter, &message, 1);
+-	kfree(data);
++    ret = i2c_transfer(ts->client->adapter, &message, 1); // 发送这 1 个消息
++    kfree(data); // 使用完毕，必须释放内存，否则会导致内核内存泄漏！
+ 
+-	if (ret == 1)
+-		return 0;
++    if (ret == 1)
++        return 0;
+ 
+-	if (ret < 0)
+-		return ret;
++    if (ret < 0)
++        return ret;
+ 
+-	return -EIO;
++    return -EIO;
+ }
+ 
++/* 封装好的快捷函数：向指定寄存器写入单个字节（常用于清除状态位） */
+ static int gt9147_i2c_write_u8(struct gt9147_ts *ts, u16 reg, u8 value)
+ {
+-	return gt9147_i2c_write(ts, reg, &value, sizeof(value));
++    return gt9147_i2c_write(ts, reg, &value, sizeof(value));
+ }
+ 
++/* ---------------- 硬件初始化序列 ---------------- */
++
++/*
++ * 重置触摸屏芯片（极其核心的硬件魔术！）
++ * GT9147 支持两个 I2C 地址：0x14 和 0x5d。它通过在 Reset 释放瞬间，检测 INT 引脚的高低电平来决定用哪个地址！
++ */
+ static int gt9147_reset(struct gt9147_ts *ts)
+ {
+-	int ret;
+-
+-	/*
+-	 * Goodix address selection sequence:
+-	 *
+-	 * RESET low
+-	 * INT high selects I2C address 0x14
+-	 * INT low selects I2C address 0x5d
+-	 * RESET high
+-	 * INT low for synchronization
+-	 * INT becomes interrupt input
+-	 */
+-
+-	ret = gpio_direction_output(ts->reset_gpio, 0);
+-	if (ret)
+-		return ret;
+-
+-	ret = gpio_direction_output(ts->irq_gpio,
+-				    ts->client->addr == 0x14 ? 1 : 0);
+-	if (ret)
+-		return ret;
+-
+-	msleep(20);
+-
+-	gpio_set_value(ts->reset_gpio, 1);
+-	usleep_range(6000, 10000);
+-
+-	gpio_set_value(ts->irq_gpio, 0);
+-	msleep(50);
+-
+-	ret = gpio_direction_input(ts->irq_gpio);
+-	if (ret)
+-		return ret;
+-
+-	msleep(10);
+-
+-	return 0;
++    int ret;
++
++    /*
++     * Goodix 地址选择时序图解析：
++     *
++     * RESET 拉低 (芯片进入死机复位状态)
++     * INT 拉高 选择 I2C 地址 0x14 (或者拉低选择 0x5d)
++     * RESET 拉高 (芯片复位结束，在此瞬间芯片读取 INT 引脚电平锁定自己的地址)
++     * INT 拉低 用于时序同步
++     * 随后必须将 INT 引脚重新配置为输入模式，让芯片日后可以通过它发中断信号！
++     */
++
++    /*
++     * 将 Reset 引脚配置为输出并拉低（开始复位）。
++     * 设备树中 reset-gpios 带 GPIO_ACTIVE_LOW，gpiod 的逻辑电平与物理电平相反：
++     *   逻辑 1 -> 物理低（复位有效）
++     *   逻辑 0 -> 物理高（释放复位）
++     * 所以“复位有效”要写 1，而不是旧 gpio_* 接口里的 0。
++     */
++    ret = gpiod_direction_output(ts->reset_gpio, 1);
++    if (ret) return ret;
++
++    /* 将 INT 引脚配置为输出，根据我们在设备树里写的地址，输出高或低 */
++    ret = gpiod_direction_output(ts->irq_gpio,
++                    ts->client->addr == 0x14 ? 1 : 0);
++    if (ret) return ret;
++
++    msleep(20); // 保持复位状态 20 毫秒
++
++    gpiod_set_value_cansleep(ts->reset_gpio, 0); // 逻辑 0：释放复位（物理拉高），芯片此时读取 INT 电平锁定地址！
++    usleep_range(6000, 10000);         // 延时 6~10 毫秒等待芯片内部启动
++
++    gpiod_set_value_cansleep(ts->irq_gpio, 0);   // 同步信号，INT 拉低
++    msleep(50);                        // 等待 50 毫秒
++
++    /* 魔法结束：把被我们征用当输出引脚的 INT 线，重新配置回输入模式（恢复它原本中断线的身份） */
++    ret = gpiod_direction_input(ts->irq_gpio);
++    if (ret) return ret;
++
++    msleep(10); // 再等 10 毫秒，系统彻底稳定
++
++    return 0;
+ }
+ 
++/* 读取芯片内部固化信息及设备树覆盖信息 */
+ static int gt9147_read_device_info(struct gt9147_ts *ts)
+ {
+-	struct device_node *node = ts->client->dev.of_node;
+-	u8 product_data[6];
+-	u8 config_data[7];
+-	char product_id[5];
+-	u32 value;
+-	int ret;
+-
+-	ret = gt9147_i2c_read(ts, GT9147_REG_PRODUCT_ID,
+-			      product_data, sizeof(product_data));
+-	if (ret) {
+-		dev_err(&ts->client->dev,
+-			"failed to read product ID: %d\n", ret);
+-		return ret;
+-	}
+-
+-	memcpy(product_id, product_data, 4);
+-	product_id[4] = '\0';
+-
+-	dev_info(&ts->client->dev,
+-		 "product ID: %s, firmware version: %02x%02x\n",
+-		 product_id, product_data[5], product_data[4]);
+-
+-	ret = gt9147_i2c_read(ts, GT9147_REG_CONFIG,
+-			      config_data, sizeof(config_data));
+-	if (ret) {
+-		dev_err(&ts->client->dev,
+-			"failed to read configuration: %d\n", ret);
+-		return ret;
+-	}
+-
+-	ts->size_x = config_data[1] | (config_data[2] << 8);
+-	ts->size_y = config_data[3] | (config_data[4] << 8);
+-	ts->max_touch_num = config_data[5] & 0x0f;
+-	ts->irq_type = config_data[6] & 0x03;
+-
+-	if (!ts->size_x)
+-		ts->size_x = GT9147_DEFAULT_WIDTH;
+-
+-	if (!ts->size_y)
+-		ts->size_y = GT9147_DEFAULT_HEIGHT;
+-
+-	if (!ts->max_touch_num ||
+-	    ts->max_touch_num > GT9147_MAX_TOUCHES)
+-		ts->max_touch_num = GT9147_MAX_TOUCHES;
+-
+-	/*
+-	 * Device-tree properties override the controller configuration.
+-	 * These values represent the final display coordinate dimensions.
+-	 */
+-	if (!of_property_read_u32(node, "touchscreen-size-x", &value) &&
+-	    value > 0)
+-		ts->size_x = value;
+-
+-	if (!of_property_read_u32(node, "touchscreen-size-y", &value) &&
+-	    value > 0)
+-		ts->size_y = value;
+-
+-	ts->inverted_x =
+-		of_property_read_bool(node, "touchscreen-inverted-x");
+-	ts->inverted_y =
+-		of_property_read_bool(node, "touchscreen-inverted-y");
+-	ts->swapped_xy =
+-		of_property_read_bool(node, "touchscreen-swapped-x-y");
+-
+-	dev_info(&ts->client->dev,
+-		 "resolution: %ux%u, points: %u, irq type: %u\n",
+-		 ts->size_x, ts->size_y,
+-		 ts->max_touch_num, ts->irq_type);
+-
+-	return 0;
++    struct device_node *node = ts->client->dev.of_node; // 获取当前设备的设备树节点指针
++    u8 product_data[6];
++    u8 config_data[7];
++    char product_id[5];
++    u32 value;
++    int ret;
++
++    /* 读取产品 ID */
++    ret = gt9147_i2c_read(ts, GT9147_REG_PRODUCT_ID,
++                  product_data, sizeof(product_data));
++    if (ret) {
++        dev_err(&ts->client->dev, "failed to read product ID: %d\n", ret);
++        return ret;
++    }
++
++    /* 将读出来的 ASCII 码组成字符串 */
++    memcpy(product_id, product_data, 4);
++    product_id[4] = '\0';
++    // 打印到内核日志，开机时你能看到 "product ID: 9147, firmware version: ..."
++    dev_info(&ts->client->dev, "product ID: %s, firmware version: %02x%02x\n",
++         product_id, product_data[5], product_data[4]);
++
++    /* 读取硬件配置（分辨率、触控点数等） */
++    ret = gt9147_i2c_read(ts, GT9147_REG_CONFIG, config_data, sizeof(config_data));
++    if (ret) {
++        dev_err(&ts->client->dev, "failed to read configuration: %d\n", ret);
++        return ret;
++    }
++
++    /* 解析寄存器位数据，提取 X/Y 分辨率 */
++    ts->size_x = config_data[1] | (config_data[2] << 8);
++    ts->size_y = config_data[3] | (config_data[4] << 8);
++    ts->max_touch_num = config_data[5] & 0x0f; // 低 4 位是最大触控数
++    ts->irq_type = config_data[6] & 0x03;      // 低 2 位是中断触发方式
++
++    /* 防呆保护：如果读出的数据是 0，给个默认值 */
++    if (!ts->size_x) ts->size_x = GT9147_DEFAULT_WIDTH;
++    if (!ts->size_y) ts->size_y = GT9147_DEFAULT_HEIGHT;
++    if (!ts->max_touch_num || ts->max_touch_num > GT9147_MAX_TOUCHES)
++        ts->max_touch_num = GT9147_MAX_TOUCHES;
++
++    /*
++     * 非常体贴的设计：读取设备树（Device Tree）中是否有自定义属性。
++     * 如果硬件读出来的分辨率不对，设备树中配置的 "touchscreen-size-x" 优先级更高，会覆盖硬件配置。
++     */
++    if (!of_property_read_u32(node, "touchscreen-size-x", &value) && value > 0)
++        ts->size_x = value;
++
++    if (!of_property_read_u32(node, "touchscreen-size-y", &value) && value > 0)
++        ts->size_y = value;
++
++    /* 读取设备树中是否配置了反转和翻转（经常用于屏幕物理安装颠倒的情况） */
++    ts->inverted_x = of_property_read_bool(node, "touchscreen-inverted-x");
++    ts->inverted_y = of_property_read_bool(node, "touchscreen-inverted-y");
++    ts->swapped_xy = of_property_read_bool(node, "touchscreen-swapped-x-y");
++
++    dev_info(&ts->client->dev, "resolution: %ux%u, points: %u, irq type: %u\n",
++         ts->size_x, ts->size_y, ts->max_touch_num, ts->irq_type);
++
++    return 0;
+ }
+ 
++/* 软件矫正坐标（应用翻转、反转规则） */
+ static void gt9147_transform_position(struct gt9147_ts *ts,
+-				      unsigned int *x,
+-				      unsigned int *y)
++                      unsigned int *x,
++                      unsigned int *y)
+ {
+-	unsigned int temp;
++    unsigned int temp;
+ 
+-	if (ts->swapped_xy) {
+-		temp = *x;
+-		*x = *y;
+-		*y = temp;
+-	}
++    if (ts->swapped_xy) {
++        temp = *x; *x = *y; *y = temp; // 交换 X 和 Y
++    }
+ 
+-	if (*x >= ts->size_x)
+-		*x = ts->size_x - 1;
++    if (*x >= ts->size_x) *x = ts->size_x - 1; // 边界保护
++    if (*y >= ts->size_y) *y = ts->size_y - 1;
+ 
+-	if (*y >= ts->size_y)
+-		*y = ts->size_y - 1;
+-
+-	if (ts->inverted_x)
+-		*x = ts->size_x - 1 - *x;
+-
+-	if (ts->inverted_y)
+-		*y = ts->size_y - 1 - *y;
++    if (ts->inverted_x) *x = ts->size_x - 1 - *x; // X 轴镜像翻转
++    if (ts->inverted_y) *y = ts->size_y - 1 - *y; // Y 轴镜像翻转
+ }
+ 
++/* ---------------- 中断处理核心 (Bottom Half) ---------------- */
++
++/*
++ * 这是中断线程的执行体 (Threaded IRQ)。
++ * 它运行在进程上下文中，可以放心调用可能会休眠的 gt9147_i2c_read！
++ */
+ static irqreturn_t gt9147_irq_thread(int irq, void *device_data)
+ {
+-	struct gt9147_ts *ts = device_data;
+-	unsigned long active_slots = 0;
+-	u8 points[GT9147_POINT_SIZE * GT9147_MAX_TOUCHES];
+-	u8 status;
+-	unsigned int touch_num;
+-	unsigned int index;
+-	unsigned int slot;
+-	unsigned int x;
+-	unsigned int y;
+-	unsigned int width;
+-	unsigned int id;
+-	u8 *point;
+-	int ret;
+-
+-	ret = gt9147_i2c_read(ts, GT9147_REG_STATUS,
+-			      &status, sizeof(status));
+-	if (ret) {
+-		dev_err_ratelimited(&ts->client->dev,
+-				    "failed to read status: %d\n", ret);
+-		return IRQ_HANDLED;
+-	}
+-
+-	/*
+-	 * Bit 7 indicates that a complete coordinate report is ready.
+-	 * Spurious interrupts can occur, so do not process incomplete data.
+-	 */
+-	if (!(status & GT9147_STATUS_READY))
+-		return IRQ_HANDLED;
+-
+-	touch_num = status & GT9147_STATUS_TOUCH_MASK;
+-
+-	if (touch_num > ts->max_touch_num ||
+-	    touch_num > GT9147_MAX_TOUCHES) {
+-		dev_warn_ratelimited(&ts->client->dev,
+-				     "invalid touch count: %u\n",
+-				     touch_num);
+-		goto clear_status;
+-	}
+-
+-	if (touch_num) {
+-		ret = gt9147_i2c_read(ts, GT9147_REG_POINTS,
+-				      points,
+-				      touch_num * GT9147_POINT_SIZE);
+-		if (ret) {
+-			dev_err_ratelimited(&ts->client->dev,
+-					    "failed to read points: %d\n",
+-					    ret);
+-			goto clear_status;
+-		}
+-	}
+-
+-	for (index = 0; index < touch_num; index++) {
+-		point = &points[index * GT9147_POINT_SIZE];
+-
+-		id = point[0] & 0x0f;
+-		if (id >= ts->max_touch_num)
+-			continue;
+-
+-		x = point[1] | (point[2] << 8);
+-		y = point[3] | (point[4] << 8);
+-		width = point[5] | (point[6] << 8);
+-
+-		gt9147_transform_position(ts, &x, &y);
+-
+-		set_bit(id, &active_slots);
+-
+-		input_mt_slot(ts->input, id);
+-		input_mt_report_slot_state(ts->input,
+-					   MT_TOOL_FINGER, true);
+-		input_report_abs(ts->input,
+-				 ABS_MT_POSITION_X, x);
+-		input_report_abs(ts->input,
+-				 ABS_MT_POSITION_Y, y);
+-		input_report_abs(ts->input,
+-				 ABS_MT_TOUCH_MAJOR, width);
+-		input_report_abs(ts->input,
+-				 ABS_MT_WIDTH_MAJOR, width);
+-	}
+-
+-	/*
+-	 * GT9147 only reports currently active contacts. Release every slot
+-	 * which was not present in this frame.
+-	 */
+-	for (slot = 0; slot < ts->max_touch_num; slot++) {
+-		if (test_bit(slot, &active_slots))
+-			continue;
+-
+-		input_mt_slot(ts->input, slot);
+-		input_mt_report_slot_state(ts->input,
+-					   MT_TOOL_FINGER, false);
+-	}
+-
+-	/*
+-	 * Generate ABS_X, ABS_Y and BTN_TOUCH compatibility events as well.
+-	 * This allows both modern Qt evdevtouch and older applications to work.
+-	 */
+-	input_mt_report_pointer_emulation(ts->input, true);
+-	input_sync(ts->input);
++    struct gt9147_ts *ts = device_data; // 取回我们在 probe 时传入的私有数据结构
++    unsigned long active_slots = 0;     // 用位图来记录这一帧里哪些手指(Slot)还在屏幕上
++    u8 points[GT9147_POINT_SIZE * GT9147_MAX_TOUCHES]; // 分配读取所有手指坐标的缓冲区
++    u8 status;
++    unsigned int touch_num;
++    unsigned int index, slot, x, y, width, id;
++    u8 *point;
++    int ret;
++
++    /* 1. 读取状态寄存器，看看为什么产生中断 */
++    ret = gt9147_i2c_read(ts, GT9147_REG_STATUS, &status, sizeof(status));
++    if (ret) {
++        // 使用 ratelimited 防止硬件故障时无限刷屏导致系统内核崩溃
++        dev_err_ratelimited(&ts->client->dev, "failed to read status: %d\n", ret);
++        return IRQ_HANDLED;
++    }
++
++    /*
++     * Bit 7 如果不为 1，说明数据没准备好。
++     * 这可能是个假中断（毛刺），直接清除状态并返回，不处理。
++     */
++    if (!(status & GT9147_STATUS_READY))
++        goto clear_status;   /* 假中断也要清状态，否则电平触发会自激 */
++
++    /* 提取低 4 位，得出当前有几根手指 */
++    touch_num = status & GT9147_STATUS_TOUCH_MASK;
++
++    /* 防呆：如果超出了最大支持指头数，直接跳去清除状态退出 */
++    if (touch_num > ts->max_touch_num || touch_num > GT9147_MAX_TOUCHES) {
++        dev_warn_ratelimited(&ts->client->dev, "invalid touch count: %u\n", touch_num);
++        goto clear_status;
++    }
++
++    /* 2. 读取坐标数据 (如果屏幕上有人按着) */
++    if (touch_num) {
++        // 一次性把所有手指的坐标连续读出来，提升 I2C 效率
++        ret = gt9147_i2c_read(ts, GT9147_REG_POINTS, points, touch_num * GT9147_POINT_SIZE);
++        if (ret) {
++            dev_err_ratelimited(&ts->client->dev, "failed to read points: %d\n", ret);
++            goto clear_status;
++        }
++    }
++
++    /* 3. 解析每一个手指的数据，并上报给 Input 子系统 (MT Type B 协议) */
++    for (index = 0; index < touch_num; index++) {
++        point = &points[index * GT9147_POINT_SIZE]; // 定位到当前手指的 8 字节起始位
++
++        id = point[0] & 0x0f; // 第 1 个字节的低 4 位是这根手指的 硬件追踪 ID
++        if (id >= ts->max_touch_num) continue; // 非法 ID 丢弃
++
++        /* 把寄存器里的高低字节拼接成完整的 16 位坐标 */
++        x = point[1] | (point[2] << 8);
++        y = point[3] | (point[4] << 8);
++        width = point[5] | (point[6] << 8); // 接触面积
++
++        gt9147_transform_position(ts, &x, &y); // 应用翻转规则
++
++        set_bit(id, &active_slots); // ★ 在位图里打个勾：这根手指(ID)还活着！
++
++        /* 核心上报逻辑：切换到这根手指专属的 Slot（VIP通道） */
++        input_mt_slot(ts->input, id); 
++        /* 告诉内核这个 Slot 里有手指（Finger Down） */
++        input_mt_report_slot_state(ts->input, MT_TOOL_FINGER, true); 
++        /* 上报具体的绝对坐标和接触面积 */
++        input_report_abs(ts->input, ABS_MT_POSITION_X, x);
++        input_report_abs(ts->input, ABS_MT_POSITION_Y, y);
++        input_report_abs(ts->input, ABS_MT_TOUCH_MAJOR, width);
++        input_report_abs(ts->input, ABS_MT_WIDTH_MAJOR, width);
++    }
++
++    /*
++     * 4. 寻找这一帧消失的手指（释放 Slot）
++     * GT9147 硬件不会主动发“手指抬起”的信号，它只发送当前贴在屏幕上的手指。
++     * 因此驱动需要对比历史，把那些“刚刚还在，现在没打勾”的 Slot 释放掉。
++     */
++    for (slot = 0; slot < ts->max_touch_num; slot++) {
++        if (test_bit(slot, &active_slots))
++            continue; // 如果这个 Slot 刚才被打勾了，说明没抬起，跳过。
++
++        input_mt_slot(ts->input, slot); // 切换到失踪手指的 Slot
++        /* 告诉内核，这根手指离开了 (Finger Up)，该 Slot 生命周期结束 */
++        input_mt_report_slot_state(ts->input, MT_TOOL_FINGER, false);
++    }
++
++    /*
++     * 5. 兼容老旧程序，并将事件打包同步给用户态
++     * 提取多点中主触点（第一根手指）的坐标，转化为传统的 ABS_X/Y 鼠标事件
++     */
++    input_mt_report_pointer_emulation(ts->input, true);
++    /* 盖章生效！内核现在可以通过 /dev/input/eventX 把整帧数据推送给应用层了 */
++    input_sync(ts->input); 
+ 
+ clear_status:
+-	ret = gt9147_i2c_write_u8(ts, GT9147_REG_STATUS, 0);
+-	if (ret) {
+-		dev_err_ratelimited(&ts->client->dev,
+-				    "failed to clear status: %d\n", ret);
+-	}
+-
+-	return IRQ_HANDLED;
++    /* 6. 收尾工作：必须向状态寄存器写 0，清除标志位，否则芯片不会发下一次中断！ */
++    ret = gt9147_i2c_write_u8(ts, GT9147_REG_STATUS, 0);
++    if (ret) {
++        dev_err_ratelimited(&ts->client->dev, "failed to clear status: %d\n", ret);
++    }
++
++    /* 返回 IRQ_HANDLED 告诉内核调度器：本中断已经妥善处理完毕 */
++    return IRQ_HANDLED;
+ }
+ 
++/* ---------------- Input 子系统注册 ---------------- */
++
+ static int gt9147_input_init(struct gt9147_ts *ts)
+ {
+-	struct input_dev *input;
+-	int ret;
+-
+-	input = input_allocate_device();
+-	if (!input)
+-		return -ENOMEM;
+-
+-	ts->input = input;
+-
+-	input->name = GT9147_INPUT_NAME;
+-	input->phys = "input/gt9147";
+-	input->id.bustype = BUS_I2C;
+-	input->dev.parent = &ts->client->dev;
+-
+-	__set_bit(EV_KEY, input->evbit);
+-	__set_bit(EV_ABS, input->evbit);
+-	__set_bit(BTN_TOUCH, input->keybit);
+-	__set_bit(INPUT_PROP_DIRECT, input->propbit);
+-
+-	input_set_abs_params(input, ABS_X,
+-			     0, ts->size_x - 1, 0, 0);
+-	input_set_abs_params(input, ABS_Y,
+-			     0, ts->size_y - 1, 0, 0);
+-
+-	input_set_abs_params(input, ABS_MT_POSITION_X,
+-			     0, ts->size_x - 1, 0, 0);
+-	input_set_abs_params(input, ABS_MT_POSITION_Y,
+-			     0, ts->size_y - 1, 0, 0);
+-
+-	input_set_abs_params(input, ABS_MT_TOUCH_MAJOR,
+-			     0, 255, 0, 0);
+-	input_set_abs_params(input, ABS_MT_WIDTH_MAJOR,
+-			     0, 255, 0, 0);
+-
+-	ret = input_mt_init_slots(input,
+-				  ts->max_touch_num,
+-				  INPUT_MT_DIRECT);
+-	if (ret) {
+-		dev_err(&ts->client->dev,
+-			"failed to initialize MT slots: %d\n", ret);
+-		goto free_input;
+-	}
+-
+-	ret = input_register_device(input);
+-	if (ret) {
+-		dev_err(&ts->client->dev,
+-			"failed to register input device: %d\n", ret);
+-		goto free_input;
+-	}
+-
+-	return 0;
++    struct input_dev *input;
++    int ret;
++
++    /* 申请一个空的 input_dev 结构体 */
++    input = input_allocate_device();
++    if (!input) return -ENOMEM;
++
++    ts->input = input;
++
++    /* 填写设备身份信息（可通过 cat /proc/bus/input/devices 查看到） */
++    input->name = GT9147_INPUT_NAME;
++    input->phys = "input/gt9147";
++    input->id.bustype = BUS_I2C;
++    input->dev.parent = &ts->client->dev; // 在 sysfs 设备树中挂在 I2C 节点下
++
++    /* 核心：宣告本设备的能力 (Capabilities) */
++    __set_bit(EV_KEY, input->evbit); // 能发按键事件 (为了兼容单点触摸的 BTN_TOUCH)
++    __set_bit(EV_ABS, input->evbit); // 能发绝对坐标事件 (触摸屏必备)
++    __set_bit(BTN_TOUCH, input->keybit); // 宣告能发触摸按键
++    __set_bit(INPUT_PROP_DIRECT, input->propbit); // 宣告这是一个“直接接触式”的屏幕设备
++
++    /* 设定坐标轴的逻辑范围 (Min, Max) */
++    input_set_abs_params(input, ABS_X, 0, ts->size_x - 1, 0, 0); // 兼容模式的 X 轴
++    input_set_abs_params(input, ABS_Y, 0, ts->size_y - 1, 0, 0); // 兼容模式的 Y 轴
++    input_set_abs_params(input, ABS_MT_POSITION_X, 0, ts->size_x - 1, 0, 0); // 多点协议 X 轴
++    input_set_abs_params(input, ABS_MT_POSITION_Y, 0, ts->size_y - 1, 0, 0); // 多点协议 Y 轴
++    input_set_abs_params(input, ABS_MT_TOUCH_MAJOR, 0, 255, 0, 0); // 触摸面积范围
++    input_set_abs_params(input, ABS_MT_WIDTH_MAJOR, 0, 255, 0, 0);
++
++    /* 
++     * 初始化 MT Type B 的 Slots（向内核申请内存建立那几个包厢）
++     * INPUT_MT_DIRECT 标志告诉内核这是一个触摸屏而不是触摸板。
++     */
++    ret = input_mt_init_slots(input, ts->max_touch_num, INPUT_MT_DIRECT);
++    if (ret) {
++        dev_err(&ts->client->dev, "failed to initialize MT slots: %d\n", ret);
++        goto free_input;
++    }
++
++    /* 正式向内核注册该设备，/dev/input/eventX 就是在此刻被创建出来的！ */
++    ret = input_register_device(input);
++    if (ret) {
++        dev_err(&ts->client->dev, "failed to register input device: %d\n", ret);
++        goto free_input;
++    }
++
++    return 0;
+ 
+ free_input:
+-	input_free_device(input);
+-	ts->input = NULL;
+-
+-	return ret;
++    input_free_device(input);
++    ts->input = NULL;
++    return ret;
+ }
+ 
+-static int gt9147_probe(struct i2c_client *client,
+-			 const struct i2c_device_id *id)
++/* ---------------- 驱动的入口与出口 (Probe & Remove) ---------------- */
++
++/*
++ * 设备与驱动匹配成功后，内核会自动回调 probe 函数。
++ * 它的任务是“搞定一切”：分配内存、配置引脚、注册中断、注册 Input。
++ */
++static int gt9147_probe(struct i2c_client *client,const struct i2c_device_id *id)
+ {
+-	struct gt9147_ts *ts;
+-	struct device_node *node = client->dev.of_node;
+-	unsigned long irq_flags;
+-	int ret;
+-
+-	if (!node)
+-		return -EINVAL;
+-
+-	if (!i2c_check_functionality(client->adapter,
+-				     I2C_FUNC_I2C)) {
+-		dev_err(&client->dev,
+-			"I2C adapter does not support plain I2C\n");
+-		return -EIO;
+-	}
+-
+-	ts = devm_kzalloc(&client->dev, sizeof(*ts), GFP_KERNEL);
+-	if (!ts)
+-		return -ENOMEM;
+-
+-	ts->client = client;
+-	i2c_set_clientdata(client, ts);
+-
+-	ts->reset_gpio =
+-		of_get_named_gpio(node, "reset-gpios", 0);
+-	if (ts->reset_gpio == -EPROBE_DEFER)
+-		return -EPROBE_DEFER;
+-
+-	if (!gpio_is_valid(ts->reset_gpio)) {
+-		dev_err(&client->dev,
+-			"invalid reset-gpios property\n");
+-		return -EINVAL;
+-	}
+-
+-	ts->irq_gpio =
+-		of_get_named_gpio(node, "interrupt-gpios", 0);
+-	if (ts->irq_gpio == -EPROBE_DEFER)
+-		return -EPROBE_DEFER;
+-
+-	if (!gpio_is_valid(ts->irq_gpio)) {
+-		dev_err(&client->dev,
+-			"invalid interrupt-gpios property\n");
+-		return -EINVAL;
+-	}
+-
+-	ret = devm_gpio_request_one(&client->dev,
+-				    ts->reset_gpio,
+-				    GPIOF_OUT_INIT_LOW,
+-				    "gt9147-reset");
+-	if (ret) {
+-		dev_err(&client->dev,
+-			"failed to request reset GPIO: %d\n", ret);
+-		return ret;
+-	}
+-
+-	ret = devm_gpio_request_one(&client->dev,
+-				    ts->irq_gpio,
+-				    GPIOF_OUT_INIT_LOW,
+-				    "gt9147-interrupt");
+-	if (ret) {
+-		dev_err(&client->dev,
+-			"failed to request interrupt GPIO: %d\n", ret);
+-		return ret;
+-	}
+-
+-	ret = gt9147_reset(ts);
+-	if (ret) {
+-		dev_err(&client->dev,
+-			"controller reset failed: %d\n", ret);
+-		return ret;
+-	}
+-
+-	ret = gt9147_read_device_info(ts);
+-	if (ret)
+-		return ret;
+-
+-	ret = gt9147_input_init(ts);
+-	if (ret)
+-		return ret;
+-
+-	ts->irq = client->irq;
+-	if (ts->irq <= 0)
+-		ts->irq = gpio_to_irq(ts->irq_gpio);
+-
+-	if (ts->irq < 0) {
+-		ret = ts->irq;
+-		dev_err(&client->dev,
+-			"failed to obtain IRQ: %d\n", ret);
+-		goto unregister_input;
+-	}
+-
+-	irq_flags = gt9147_irq_flags[ts->irq_type] |
+-		    IRQF_ONESHOT;
+-
+-	ret = devm_request_threaded_irq(&client->dev,
+-					ts->irq,
+-					NULL,
+-					gt9147_irq_thread,
+-					irq_flags,
+-					GT9147_DRIVER_NAME,
+-					ts);
+-	if (ret) {
+-		dev_err(&client->dev,
+-			"failed to request IRQ %d: %d\n",
+-			ts->irq, ret);
+-		goto unregister_input;
+-	}
+-
+-	dev_info(&client->dev,
+-		 "GT9147 touchscreen registered on IRQ %d\n",
+-		 ts->irq);
+-
+-	return 0;
++    struct gt9147_ts *ts;
++    struct device_node *node = client->dev.of_node;
++    unsigned long irq_flags;
++    int ret;
++
++    if (!node) return -EINVAL; // 如果没有设备树节点，直接报错返回
++
++    /* 检查底层的 I2C 控制器硬件是否支持标准的 I2C 读写能力 */
++    if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C)) {
++        dev_err(&client->dev, "I2C adapter does not support plain I2C\n");
++        return -EIO;
++    }
++
++    /* devm_kzalloc 是内核的自动化内存管理，驱动卸载时会自动 kfree，极大地防止了内存泄漏 */
++    ts = devm_kzalloc(&client->dev, sizeof(*ts), GFP_KERNEL);
++    if (!ts) return -ENOMEM;
++
++    ts->client = client;
++    i2c_set_clientdata(client, ts); // 将私有数据结构藏进 i2c_client 里面，方便后续随时取用
++
++    /* 以 gpiod 描述符方式获取并接管 reset 引脚，初始化为输出低电平 */
++    ts->reset_gpio = devm_gpiod_get(&client->dev, "reset", GPIOD_OUT_LOW);
++    if (IS_ERR(ts->reset_gpio)) {
++        ret = PTR_ERR(ts->reset_gpio);
++        if (ret != -EPROBE_DEFER)
++            dev_err(&client->dev, "failed to get reset-gpios: %d\n", ret);
++        return ret;
++    }
++
++    /* 以 gpiod 描述符方式获取 interrupt 引脚，初始输出低电平（一会做地址选择复用） */
++    ts->irq_gpio = devm_gpiod_get(&client->dev, "interrupt", GPIOD_OUT_LOW);
++    if (IS_ERR(ts->irq_gpio)) {
++        ret = PTR_ERR(ts->irq_gpio);
++        if (ret != -EPROBE_DEFER)
++            dev_err(&client->dev, "failed to get interrupt-gpios: %d\n", ret);
++        return ret;
++    }
++
++    /* 调用硬件魔术：完成复位和 I2C 地址选择 */
++    ret = gt9147_reset(ts);
++    if (ret) {
++        dev_err(&client->dev, "controller reset failed: %d\n", ret);
++        return ret;
++    }
++
++    /* 硬件通电了，尝试读一下芯片内部的各种分辨率参数 */
++    ret = gt9147_read_device_info(ts);
++    if (ret) return ret;
++
++    /* 初始化并注册 Input 子系统 */
++    ret = gt9147_input_init(ts);
++    if (ret) return ret;
++
++    /* 
++     * 重点来了：获取虚拟中断号 (virq)！
++     * 1. 首选：看看 I2C 核心层有没有帮我们在解析设备树时搞定。
++     * 2. 兜底：如果核心层没搞定，我们手动将设备树里读到的 IRQ GPIO 转换成中断号。
++     */
++    ts->irq = client->irq; 
++    if (ts->irq <= 0)
++        ts->irq = gpiod_to_irq(ts->irq_gpio);
++
++    if (ts->irq < 0) {
++        ret = ts->irq;
++        dev_err(&client->dev, "failed to obtain IRQ: %d\n", ret);
++        goto unregister_input; // 失败了，要去善后（注销前面注册的 Input 设备）
++    }
++
++    /*
++     * 中断触发方式固定用"下降沿"，不再采用芯片配置寄存器第 6 字节的取值。
++     *
++     * 实机排查结论（2026-10-02）：
++     *   本板 GT9 系列触摸芯片配置寄存器第 6 字节低 2 位读出来是 3（驱动表里对应
++     *   IRQF_TRIGGER_HIGH），但芯片 INT 引脚实际是"低有效"——空闲时读
++     *   GPIO1_PSR(0x0209C008) 的 bit9 = 1，即 INT 常态为高。
++     *   于是电平触发条件在空闲时恒成立，形成中断风暴：
++     *     - /proc/interrupts 显示该中断为 Level，空闲时仍 ~1480 次/秒
++     *     - 中断线程每次只读一次状态寄存器，发现 bit7=0 就返回，既不清中断也不释放
++     *     - 实测 irq/38-gt9147 长期占用 22%~28% CPU，系统态 CPU 30%，
++     *       视频软解因此得不到足够 CPU 而卡顿
++     *
++     * 下降沿语义与"低有效"一致：数据就绪只产生一个边沿，线程读完状态并写 0 清标志，
++     * 不会再自激。若日后更换触摸芯片需要改回电平触发，请同时保证中断线程在所有
++     * 分支上都清状态寄存器。
++     */
++    irq_flags = IRQF_TRIGGER_FALLING | IRQF_ONESHOT;
++
++    /*
++     * 申请中断线程化！(最核心的现代中断注册方式)
++     * 注意第 3 个参数（硬中断 handler）传了 NULL，内核会自动提供默认返回，并唤醒我们的 ts->irq_thread 线程！
++     */
++    ret = devm_request_threaded_irq(&client->dev, ts->irq, NULL,
++                    gt9147_irq_thread, irq_flags,
++                    GT9147_DRIVER_NAME, ts);
++    if (ret) {
++        dev_err(&client->dev, "failed to request IRQ %d: %d\n", ts->irq, ret);
++        goto unregister_input;
++    }
++
++    /* 大功告成！打印启动成功日志 */
++    dev_info(&client->dev, "GT9147 touchscreen registered on IRQ %d\n", ts->irq);
++
++    return 0;
+ 
+ unregister_input:
+-	input_unregister_device(ts->input);
+-	ts->input = NULL;
+-
+-	return ret;
++    input_unregister_device(ts->input);
++    ts->input = NULL;
++    return ret;
+ }
+ 
++/* 驱动卸载或设备被拔出时回调 */
+ static int gt9147_remove(struct i2c_client *client)
+ {
+-	struct gt9147_ts *ts = i2c_get_clientdata(client);
++    // 从 i2c_client 取回我们刚才藏在里面的私有结构体
++    struct gt9147_ts *ts = i2c_get_clientdata(client);
+ 
+-	if (!ts)
+-		return 0;
++    if (!ts) return 0;
+ 
+-	if (ts->irq > 0)
+-		devm_free_irq(&client->dev, ts->irq, ts);
++    /* 释放中断（devm 机制理论上会自动释放，这里手动释放是为了保证严格的清理顺序） */
++    if (ts->irq > 0)
++        devm_free_irq(&client->dev, ts->irq, ts);
+ 
+-	if (ts->input) {
+-		input_unregister_device(ts->input);
+-		ts->input = NULL;
+-	}
++    /* 注销 Input 设备，此时 /dev/input/eventX 会被内核从文件系统中删掉 */
++    if (ts->input) {
++        input_unregister_device(ts->input);
++        ts->input = NULL;
++    }
+ 
+-	return 0;
++    return 0;
+ }
+ 
++/* ---------------- 驱动骨架注册 (Boilerplate) ---------------- */
++
++/* 老旧平台的 I2C ID 匹配表 */
+ static const struct i2c_device_id gt9147_id_table[] = {
+-	{ "gt9147", 0 },
+-	{ }
++    { "gt9147", 0 },
++    { } // 必须以空项结尾
+ };
+ MODULE_DEVICE_TABLE(i2c, gt9147_id_table);
+ 
++/* 现代设备树 (Device Tree) 匹配表。只要 DTS 节点里的 compatible 字段包含这两行字符串，内核就会自动调 probe！ */
+ static const struct of_device_id gt9147_of_match[] = {
+-	{ .compatible = "goodix,gt9147" },
+-	{ .compatible = "goodix,gt9xx" },
+-	{ }
++    { .compatible = "goodix,gt9147" },
++    { .compatible = "goodix,gt9xx" },
++    { }
+ };
+ MODULE_DEVICE_TABLE(of, gt9147_of_match);
+ 
++/* 核心驱动结构体：把我们的代码挂载到内核的 I2C 总线核心层 */
+ static struct i2c_driver gt9147_driver = {
+-	.driver = {
+-		.name = GT9147_DRIVER_NAME,
+-		.owner = THIS_MODULE,
+-		.of_match_table = gt9147_of_match,
+-	},
+-	.probe = gt9147_probe,
+-	.remove = gt9147_remove,
+-	.id_table = gt9147_id_table,
++    .driver = {
++        .name = GT9147_DRIVER_NAME, // 驱动名
++        .owner = THIS_MODULE,
++        .of_match_table = gt9147_of_match, // 绑定设备树匹配表
++    },
++    .probe = gt9147_probe,   // 绑定加载函数
++    .remove = gt9147_remove, // 绑定卸载函数
++    .id_table = gt9147_id_table,
+ };
+ 
++/* 一键注册宏，代替繁琐的 module_init 和 module_exit */
+ module_i2c_driver(gt9147_driver);
+ 
++/* 驱动基础信息，使用 modinfo 工具可以查看 */
+ MODULE_AUTHOR("Pointer");
+ MODULE_DESCRIPTION("Goodix GT9147 touchscreen driver for i.MX6ULL");
+-MODULE_LICENSE("GPL");
+\ No newline at end of file
++MODULE_LICENSE("GPL"); // 必须是 GPL，否则内核会拒绝加载部分有版权保护的 API！
+diff --git a/drivers/smarthome/icm20608.c b/drivers/smarthome/icm20608.c
+index 4a2a140e..e53e4223 100644
+--- a/drivers/smarthome/icm20608.c
++++ b/drivers/smarthome/icm20608.c
+@@ -21,7 +21,7 @@
+ #include <linux/uaccess.h>
+ 
+ #include <linux/smarthome_icm20608.h>
+-
++/* 定义icm20608寄存器的地址*/
+ #define ICM20608_REG_SMPLRT_DIV       0x19
+ #define ICM20608_REG_CONFIG           0x1a
+ #define ICM20608_REG_GYRO_CONFIG      0x1b
+@@ -46,6 +46,9 @@
+ 
+ #define ICM20608_SPI_MAX_HZ           8000000
+ 
++/* 这是SPI设备的私有数据结构，包含底层硬件的SPI总线的设备spi_device
++* 并且包含向Linux系统中注册的miscdev结构体，在内核中把SPI设备注册为misc设备
++*/
+ struct icm20608_device {
+ 	struct spi_device *spi;
+ 	struct miscdevice miscdev;
+@@ -53,35 +56,38 @@ struct icm20608_device {
+ 	u8 who_am_i;
+ };
+ 
++/* 封装对于SPI设备内部的一个字节的读取与写入*/
+ static int icm20608_read_reg(struct icm20608_device *dev,u8 reg, u8 *value)
+ {
+ 	u8 command;
+ 	int ret;
+ 	command = reg | 0x80;
++	/* 先发送 1 Byte 命令,然后接收 1 Byte 数据;例如CPU发送 0xF5，ICM20608读取寄存器 0x75返回 WHO_AM_I*/
+ 	ret = spi_write_then_read(dev->spi,&command,1,value,1);
+ 
+ 	return ret;
+ }
+-
+-static int icm20608_read_regs(struct icm20608_device *dev,u8 reg,u8 *buffer,
+-			            unsigned int length)
++/*从某个寄存器开始连续读取多个字节*/
++static int icm20608_read_regs(struct icm20608_device *dev,u8 reg,u8 *buffer,unsigned int length)
+ {
+ 	u8 command;
+ 	command = reg | 0x80;
+ 
+ 	return spi_write_then_read(dev->spi,&command,1,buffer,length);
+ }
+-
++/* 向 ICM20608 某个寄存器写一个字节*/
+ static int icm20608_write_reg(struct icm20608_device *dev,u8 reg,u8 value)
+ {
+ 	u8 buffer[2];
+ 
+-	buffer[0] = reg & 0x7f;
+-	buffer[1] = value;
++	buffer[0] = reg & 0x7f;//寄存器地址 
++	buffer[1] = value;// 寄存器值
+ 
+ 	return spi_write(dev->spi, buffer, sizeof(buffer));
+ }
+ 
++
++/* 复位并初始化 ICM20608 芯片*/
+ static int icm20608_reset_and_configure(struct icm20608_device *dev)
+ {
+ 	int ret;
+@@ -149,24 +155,22 @@ static int icm20608_reset_and_configure(struct icm20608_device *dev)
+ 
+ 	return 0;
+ }
+-
++/*把两个连续的 8 bit 数据合并成一个有符号 16 bit 数据,ICM20608 的传感器数据格式是
++*High Byte,Low Byte例如data[0] = 0x12,data[1] = 0x34
++*/
+ static s16 icm20608_be16_to_s16(const u8 *data)
+ {
+ 	return (s16)(((u16)data[0] << 8) | data[1]);
+ }
+-
+-static int icm20608_get_sample_locked(struct icm20608_device *dev,
+-				      struct icm20608_sample *sample)
++/* 最核心的数据采集函数,一次读取完整的 ICM20608 采样，并解析成结构体*/
++static int icm20608_get_sample_locked(struct icm20608_device *dev,struct icm20608_sample *sample)
+ {
+ 	u8 data[14];
+ 	int ret;
+ 
+ 	memset(sample, 0, sizeof(*sample));
+ 
+-	ret = icm20608_read_regs(dev,
+-				 ICM20608_REG_ACCEL_XOUT_H,
+-				 data,
+-				 sizeof(data));
++	ret = icm20608_read_regs(dev,ICM20608_REG_ACCEL_XOUT_H,data,sizeof(data));
+ 	if (ret)
+ 		return ret;
+ 
+@@ -185,26 +189,21 @@ static int icm20608_get_sample_locked(struct icm20608_device *dev,
+ 
+ 	return 0;
+ }
+-
++/* 面向用户态的open接口*/
+ static int icm20608_open(struct inode *inode, struct file *file)
+ {
+ 	struct miscdevice *miscdev;
+ 	struct icm20608_device *dev;
+ 
+ 	miscdev = file->private_data;
+-	dev = container_of(miscdev,
+-			   struct icm20608_device,
+-			   miscdev);
++	dev = container_of(miscdev,struct icm20608_device,miscdev);
+ 
+ 	file->private_data = dev;
+ 
+ 	return 0;
+ }
+ 
+-static ssize_t icm20608_read(struct file *file,
+-			     char __user *buffer,
+-			     size_t count,
+-			     loff_t *position)
++static ssize_t icm20608_read(struct file *file, char __user *buffer,size_t count,loff_t *position)
+ {
+ 	struct icm20608_device *dev = file->private_data;
+ 	struct icm20608_sample sample;
+@@ -215,7 +214,7 @@ static ssize_t icm20608_read(struct file *file,
+ 
+ 	mutex_lock(&dev->lock);
+ 
+-	ret = icm20608_get_sample_locked(dev, &sample);
++	ret = icm20608_get_sample_locked(dev, &sample);/* 最核心的数据采集函数,一次读取完整的 ICM20608 采样，并解析成结构体*/
+ 
+ 	mutex_unlock(&dev->lock);
+ 
+@@ -228,52 +227,36 @@ static ssize_t icm20608_read(struct file *file,
+ 	return sizeof(sample);
+ }
+ 
+-static long icm20608_ioctl(struct file *file,
+-			   unsigned int command,
+-			   unsigned long argument)
++static long icm20608_ioctl(struct file *file,unsigned int command,unsigned long argument)
+ {
+ 	struct icm20608_device *dev = file->private_data;
+ 	struct icm20608_sample sample;
+ 	u8 who_am_i;
+ 	int ret;
+-
+ 	switch (command) {
+ 	case ICM20608_IOC_GET_SAMPLE:
+ 		mutex_lock(&dev->lock);
+-
+ 		ret = icm20608_get_sample_locked(dev, &sample);
+-
+ 		mutex_unlock(&dev->lock);
+-
+ 		if (ret)
+ 			return ret;
+-
+ 		if (copy_to_user((void __user *)argument,
+ 				 &sample,
+ 				 sizeof(sample)))
+ 			return -EFAULT;
+-
+ 		return 0;
+ 
+ 	case ICM20608_IOC_GET_WHO_AM_I:
+ 		who_am_i = dev->who_am_i;
+ 
+-		if (copy_to_user((void __user *)argument,
+-				 &who_am_i,
+-				 sizeof(who_am_i)))
++		if (copy_to_user((void __user *)argument,&who_am_i,sizeof(who_am_i)))
+ 			return -EFAULT;
+-
+ 		return 0;
+-
+ 	case ICM20608_IOC_RESET:
+ 		mutex_lock(&dev->lock);
+-
+ 		ret = icm20608_reset_and_configure(dev);
+-
+ 		mutex_unlock(&dev->lock);
+-
+ 		return ret;
+-
+ 	default:
+ 		return -ENOTTY;
+ 	}
+@@ -293,9 +276,7 @@ static int icm20608_probe(struct spi_device *spi)
+ 	u8 who_am_i;
+ 	int ret;
+ 
+-	dev = devm_kzalloc(&spi->dev,
+-			   sizeof(*dev),
+-			   GFP_KERNEL);
++	dev = devm_kzalloc(&spi->dev,sizeof(*dev), GFP_KERNEL);
+ 	if (!dev)
+ 		return -ENOMEM;
+ 
+@@ -319,8 +300,12 @@ static int icm20608_probe(struct spi_device *spi)
+ 
+ 	spi_set_drvdata(spi, dev);
+ 
+-	msleep(100);
+-
++	/*
++	 * 这里原来 msleep(100) 等器件上电稳定。
++	 * 该驱动在系统启动约 8 秒后才 probe，器件早已上电；
++	 * 而真正的复位等待在 icm20608_reset_and_configure() 里（软复位后 100ms），
++	 * WHO_AM_I 在睡眠模式下同样可读，因此这里不需要再等。
++	 */
+ 	ret = icm20608_read_reg(dev,
+ 				ICM20608_REG_WHO_AM_I,
+ 				&who_am_i);
+@@ -384,13 +369,10 @@ static int icm20608_remove(struct spi_device *spi)
+ 	return 0;
+ }
+ 
++/* 名称进行匹配 .driver属性中的*/
+ static const struct of_device_id icm20608_of_match[] = {
+-	{
+-		.compatible = "smarthome,icm20608",
+-	},
+-	{
+-		.compatible = "invensense,icm20608",
+-	},
++	{.compatible = "smarthome,icm20608",},
++	{.compatible = "invensense,icm20608",},
+ 	{ }
+ };
+ MODULE_DEVICE_TABLE(of, icm20608_of_match);
+@@ -418,4 +400,4 @@ module_spi_driver(icm20608_driver);
+ 
+ MODULE_AUTHOR("Pointer");
+ MODULE_DESCRIPTION("ICM20608 SPI driver for i.MX6ULL");
+-MODULE_LICENSE("GPL");
+\ No newline at end of file
++MODULE_LICENSE("GPL");
+diff --git a/drivers/smarthome/liteon_ap3216c.c b/drivers/smarthome/liteon_ap3216c.c
+index d8ec3dd1..916599c0 100644
+--- a/drivers/smarthome/liteon_ap3216c.c
++++ b/drivers/smarthome/liteon_ap3216c.c
+@@ -13,8 +13,21 @@
+  *         status = "okay";
+  *     };
+  * };
++ * 
++ * 功能：
++ *   1. 基于 Linux I2C 子系统实现 AP3216C 从设备驱动
++ *   2. 通过 Device Tree 完成设备与驱动匹配
++ *   3. 初始化 AP3216C，并使能 ALS / PS / IR 功能
++ *   4. 通过 I2C 总线读取 AP3216C 的传感器数据
++ *   5. 将原始寄存器数据解析为 ALS / PS / IR 数据
++ *   6. 使用 miscdevice 创建 /dev/ap3216c
++ *   7. 通过 ioctl 向用户态提供数据读取接口
++ *   8. 使用 mutex 对 I2C 访问进行并发保护
++ *
+  */
+ 
++
++
+ #include <linux/bitops.h>
+ #include <linux/delay.h>
+ #include <linux/fs.h>
+@@ -31,7 +44,7 @@
+ #include "linux/liteon_ap3216c.h"
+ 
+ /* AP3216C Register Definition */
+-#define AP3216C_REG_SYS_CFG     0x00
++#define AP3216C_REG_SYS_CFG     0x00                                                                                   
+ #define AP3216C_REG_IR_LOW      0x0A
+ #define AP3216C_REG_IR_HIGH     0x0B
+ #define AP3216C_REG_ALS_LOW     0x0C
+@@ -46,14 +59,15 @@
+ #define AP3216C_MODE_ALS_PS_IR  0x03
+ #define AP3216C_MODE_SW_RESET   0x04
+ 
++// IIC设备私有的数据结构体,将这个 AP3216C 设备所需要的所有资源组织在一起
+ struct ap3216c_device {
+-    struct i2c_client *client;
++    struct i2c_client *client;  /* i2c_client是从机设备 */
+     struct miscdevice miscdev;  /* 产生 /dev/ap3216c */
+     struct mutex lock;          /* 防止多线程并发访问 I2C 造成数据错乱 */
+ };
+ 
+ /* ============================================================
+- * AP3216C register access
++ * 对 AP3216C 的底层寄存器读写进行封装,从 AP3216C 指定寄存器读取/写入一个字节
+  * ============================================================ */
+ 
+ static int ap3216c_read_reg(struct ap3216c_device *ap, u8 reg)
+@@ -73,7 +87,7 @@ static int ap3216c_write_reg(struct ap3216c_device *ap, u8 reg, u8 value)
+ }
+ 
+ /* ============================================================
+- * Hardware initialization
++ * Hardware initialization 硬件设备的初始化，完成 AP3216C 芯片初始化
+  * ============================================================ */
+ 
+ static int ap3216c_hw_init(struct ap3216c_device *ap)
+@@ -93,17 +107,21 @@ static int ap3216c_hw_init(struct ap3216c_device *ap)
+     if (ret)
+         return ret;
+ 
+-    /* 首次完整转换需要时间，等待第一组有效数据生成 */
+-    msleep(120);
++    /*
++     * 这里不再 msleep(120) 等“第一组数据”。
++     * ALS+PS+IR 模式的一次完整转换约 100ms，固定等 120ms 既不保证足够、
++     * 又让 probe 平白多花 120ms（probe 期间是串行阻塞启动的）。
++     * 数据是否有效由寄存器里的 IR/PS 有效位判断，驱动已通过
++     * sample->ir_valid / ps_valid 上报，调用方按需重读即可。
++     */
+ 
+     return 0;
+ }
+ 
+ /* ============================================================
+- * AP3216C 的寄存器是连续排列的，可以改成一次读取 6 个字节：
++ * AP3216C 的寄存器是连续排列的，可以改成一次读取 6 个字节：所以使用一次 Block Read 读取 6 Byte
+  * ============================================================ */
+-static int ap3216c_get_sample(struct ap3216c_device *ap,
+-                              struct ap3216c_sample *sample)
++static int ap3216c_get_sample(struct ap3216c_device *ap, struct ap3216c_sample *sample)
+ {
+     u8 data[6];
+     int ret;
+@@ -124,16 +142,16 @@ static int ap3216c_get_sample(struct ap3216c_device *ap,
+ 
+ 
+ /* ============================================================
+- * Character device interface
++ * Character device interface 字符设备接口，面向用户态的接口
+  * ============================================================ */
+ 
+ static int ap3216c_open(struct inode *inode, struct file *filp)
+ {
+     /* miscdevice 框架调用 open 时，private_data 已指向 miscdevice 结构 */
+     struct miscdevice *misc = filp->private_data;
+-    struct ap3216c_device *ap = container_of(misc, struct ap3216c_device, miscdev);
++    struct ap3216c_device *ap = container_of(misc, struct ap3216c_device, miscdev); // 利用 container_of 找到 ap3216c_device的地址
+ 
+-    filp->private_data = ap;
++    filp->private_data = ap; // 把找到的地址赋值给 struct file中的private_data指针；
+     return 0;
+ }
+ 
+@@ -144,13 +162,13 @@ static int ap3216c_release(struct inode *inode, struct file *filp)
+ 
+ /* ioctl 接口，返回 AP3216C 的完整状态或单独的 IR/ALS/PS 数据
+  * 注意：必须先读 LOW 再读 HIGH，因为读取 LOW 时当前的 HIGH 值会被锁存
+- *一次 ioctl 只读取一次完整传感器数据，并且不会在用户态拷贝期间占用锁。
++ * 一次 ioctl 只读取一次完整传感器数据，并且不会在用户态拷贝期间占用锁。
+  */
+ static long ap3216c_ioctl(struct file *filp,unsigned int cmd,unsigned long arg)
+ {
+-    struct ap3216c_device *ap = filp->private_data;
+-    struct ap3216c_sample sample;
+-    void __user *argp = (void __user *)arg;
++    struct ap3216c_device *ap = filp->private_data; // 拿到设备的私有IIC数据结构
++    struct ap3216c_sample sample; // 一次返回 AP3216C 的完整状态的数据结构体
++    void __user *argp = (void __user *)arg; // 接受用户态传入的参数
+     u16 value = 0;
+     int ret;
+     if (_IOC_TYPE(cmd) != AP3216C_IOC_MAGIC)
+@@ -185,7 +203,8 @@ static long ap3216c_ioctl(struct file *filp,unsigned int cmd,unsigned long arg)
+     return 0;
+ }
+ 
+-static const struct file_operations ap3216c_fops = {
++/* 面向用户接口的操作集合 */ 
++static const struct file_operations ap3216c_fops = {         
+     .owner          = THIS_MODULE,
+     .open           = ap3216c_open,
+     .release        = ap3216c_release,
+@@ -204,14 +223,14 @@ static int ap3216c_probe(struct i2c_client *client, const struct i2c_device_id *
+ 
+     dev_info(&client->dev, "AP3216C probe start, addr=0x%02x\n", client->addr);
+ 
+-    /* 1. Check adapter functionality */
++    /* 1. Check adapter functionality 检查 I2C Adapter 能力*/
+     if (!i2c_check_functionality(client->adapter,I2C_FUNC_SMBUS_I2C_BLOCK)) {
+         dev_err(&client->dev,"I2C adapter does not support SMBus I2C block\n");
+         return -EOPNOTSUPP;
+     }
+ 
+-    /* 2. Allocate device private data (auto-freed on remove) */
+-    ap = devm_kzalloc(&client->dev, sizeof(*ap), GFP_KERNEL);
++    /* 2. Allocate device private data (auto-freed on remove)分配 AP3216C 私有结构 */
++    ap = devm_kzalloc(&client->dev, sizeof(*ap), GFP_KERNEL); /* 一个设备对应一个私有数据结构*/
+     if (!ap)
+         return -ENOMEM;
+ 
+@@ -219,14 +238,14 @@ static int ap3216c_probe(struct i2c_client *client, const struct i2c_device_id *
+     mutex_init(&ap->lock);
+     i2c_set_clientdata(client, ap);
+ 
+-    /* 3. Initialize AP3216C hardware */
++    /* 3. Initialize AP3216C hardware 初始化 AP3216C */
+     ret = ap3216c_hw_init(ap);
+     if (ret) {
+         dev_err(&client->dev, "failed to initialize AP3216C: %d\n", ret);
+         return ret;
+     }
+ 
+-    /* 4. Register misc character device */
++    /* 4. Register misc character device 注册 miscdevice*/
+     ap->miscdev.minor = MISC_DYNAMIC_MINOR;
+     ap->miscdev.name = "ap3216c";
+     ap->miscdev.fops = &ap3216c_fops;
+@@ -240,7 +259,7 @@ static int ap3216c_probe(struct i2c_client *client, const struct i2c_device_id *
+         return ret;
+     }
+ 
+-    dev_info(&client->dev, "AP3216C initialized successfully (/dev/ap3216c)\n");
++    dev_info(&client->dev, "AP3216C initialized successfully (/dev/ap3216c)\n");        
+     return 0;
+ }
+ 
+@@ -260,18 +279,22 @@ static int ap3216c_remove(struct i2c_client *client)
+     return 0;
+ }
+ 
++/* 用于设备与驱动之间进行匹配的字符串 */
+ static const struct i2c_device_id ap3216c_id[] = {
+     { "ap3216c", 0 },
+     { /* sentinel */ }
+ };
+ MODULE_DEVICE_TABLE(i2c, ap3216c_id);
+ 
++
++/* 用于设备与驱动之间进行匹配的字符串 */
+ static const struct of_device_id ap3216c_of_match[] = {
+     { .compatible = "liteon,ap3216c" },
+     { /* sentinel */ }
+ };
+ MODULE_DEVICE_TABLE(of, ap3216c_of_match);
+ 
++/* 注册驱动的相关的内容，驱动的名称、匹配规则以及相对应的probe函数，remove函数，以及id_table*/
+ static struct i2c_driver ap3216c_driver = {
+     .driver = {
+         .name = "ap3216c",
+@@ -288,4 +311,4 @@ module_i2c_driver(ap3216c_driver);
+ 
+ MODULE_LICENSE("GPL v2");
+ MODULE_AUTHOR("JJL");
+-MODULE_DESCRIPTION("AP3216C ALS/PS/IR driver for i.MX6ULL");
+\ No newline at end of file
++MODULE_DESCRIPTION("AP3216C ALS/PS/IR driver for i.MX6ULL");
+diff --git a/drivers/smarthome/smarthome_sr04.c b/drivers/smarthome/smarthome_sr04.c
+index bb439242..65ea2d01 100644
+--- a/drivers/smarthome/smarthome_sr04.c
++++ b/drivers/smarthome/smarthome_sr04.c
+@@ -7,84 +7,96 @@
+  *     compatible = "smarthome,sr04";
+  *     pinctrl-names = "default";
+  *     pinctrl-0 = <&pinctrl_sr04>;
+- *     trig-gpios = <&gpio4 19 GPIO_ACTIVE_HIGH>;
+- *     echo-gpios = <&gpio4 20 GPIO_ACTIVE_HIGH>;
++ *     trig-gpios = <&gpio4 19 GPIO_ACTIVE_HIGH>; // 触发引脚
++ *     echo-gpios = <&gpio4 20 GPIO_ACTIVE_HIGH>; // 接收引脚（带中断）
+  *     status = "okay";
+  * };
+  */
+ 
+-/*
+-* 编译和安装：
+-* cd /home/pointer/imx6ull/projects/Vehicle-system/drivers/kernel/sr04
+-* make clean --> make --> make install 
+-* 确认模块 --> ls -lh /home/pointer/imx6ull/projects/Vehicle-system/drivers/kernel/sr04/smarthome_sr04.ko
+-* ls -lh /home/pointer/imx6ull/projects/imx6ull-nxp-bsp/deploy/nfs/rootfs/lib/modules/4.1.15+/extra/
+-*/
+-
+-#include <linux/completion.h>
+-#include <linux/delay.h>
+-#include <linux/fs.h>
+-#include <linux/gpio/consumer.h>
+-#include <linux/interrupt.h>
+-#include <linux/ktime.h>
+-#include <linux/miscdevice.h>
++/* ---------------- 基础头文件区 ---------------- */
++#include <linux/completion.h> // 提供 struct completion，用于进程与中断之间的同步阻塞等待
++#include <linux/delay.h>      // 提供 udelay, msleep 等延时函数
++#include <linux/fs.h>         // 文件系统基础（提供 file_operations）
++#include <linux/gpio/consumer.h> // 现代 GPIO 描述符 (gpiod) API
++#include <linux/interrupt.h>  // 中断核心 API (request_irq, irqreturn_t)
++#include <linux/ktime.h>      // 内核高精度时间 API (纳秒级别)，用于计算超声波飞行时间
++#include <linux/miscdevice.h> // 杂项设备框架（自动创建 /dev/ 节点，省去 alloc_chrdev_region）
+ #include <linux/module.h>
+-#include <linux/mutex.h>
+-#include <linux/of.h>
+-#include <linux/platform_device.h>
+-#include <linux/slab.h>
+-#include <linux/spinlock.h>
+-#include <linux/uaccess.h>
++#include <linux/mutex.h>      // 互斥锁（用于保护测距过程不被多个用户态进程并发打断）
++#include <linux/of.h>         // 设备树解析
++#include <linux/platform_device.h> // 平台设备总线框架
++#include <linux/slab.h>       // 内存分配 devm_kzalloc
++#include <linux/spinlock.h>   // 自旋锁（用于在中断和进程之间保护状态标志）
++#include <linux/uaccess.h>    // 用户空间数据拷贝 copy_to_user
+ #include <linux/wait.h>
+ #include <linux/jiffies.h>
+-#include "linux/smarthome_sr04.h"
++#include "linux/smarthome_sr04.h" // 自定义的 ioctl 命令宏和数据结构头文件
++
++/* ---------------- 宏定义区 ---------------- */
+ #define DRIVER_NAME             "smarthome_sr04"
+ #define DEVICE_NAME             "sr04"
+ 
+-#define SR04_TRIGGER_US         12
+-#define SR04_TIMEOUT_MS         50
+-#define SR04_MIN_PULSE_US       100
+-#define SR04_MAX_PULSE_US       30000
++#define SR04_TRIGGER_US         12    // HC-SR04 硬件要求 TRIG 引脚至少保持 10us 的高电平
++#define SR04_TIMEOUT_MS         50    // 超时时间：声音飞到 8 米外再回来大约 46ms，50ms 足够兜底
++#define SR04_MIN_PULSE_US       100   // 盲区过滤：小于 100us 的回波通常是硬件毛刺
++#define SR04_MAX_PULSE_US       30000 // 量程过滤：30ms 大约对应 5 米，超出一般不准
++/*
++ * 两次测量之间的最小间隔不需要固定取数据手册的 60ms。
++ * 那个 60ms 是按“最大量程 + 保护余量”给的保守值；真正的物理约束是
++ * **下一次触发不能落在上一次的回波窗口内**。而本驱动只有在回波结束
++ * （或等待超时）之后才会返回，所以：
++ *   - 正常收到回波：窗口此时已关闭，只需留换能器余振的时间；
++ *   - 回波超时：模块可能还在等更远的回波，保留一个较长间隔兜底。
++ * 这样间隔会随实际距离自动伸缩：近处快、远处慢，不需要拍一个固定值。
++ */
++#define SR04_ECHO_GUARD_MS      10   // 收到回波后的余量（覆盖换能器余振）
++#define SR04_TIMEOUT_GUARD_MS   60   // 超时后的保守间隔，防止迟到回波被误认
+ 
++/* ---------------- 核心私有数据结构 ---------------- */
+ struct sr04_device {
+-    struct device *dev;
+-    struct gpio_desc *trig_gpio;
+-    struct gpio_desc *echo_gpio;
+-    int irq;
+-    struct miscdevice miscdev;
+-    struct mutex measure_lock;
+-    struct completion measurement_done;
+-    spinlock_t state_lock;
+-    bool waiting_echo;
+-    bool rise_seen;
+-    bool measurement_valid;
+-    ktime_t rise_time;
+-    u32 pulse_us;
++    struct device *dev;               // 指向底层的 device 结构体，用于 dev_err 等打印
++    struct gpio_desc *trig_gpio;      // TRIG 发送引脚的描述符
++    struct gpio_desc *echo_gpio;      // ECHO 接收引脚的描述符
++    int irq;                          // 映射出的 ECHO 引脚虚拟中断号
++    struct miscdevice miscdev;        // misc 设备结构体，用于注册 /dev/sr04
++
++    struct mutex measure_lock;        // 互斥锁：防止两个 APP 同时调用 read 或 ioctl 导致时序混乱
++    struct completion measurement_done; // 完成量：用于让发起测量的进程休眠，等待中断唤醒
++
++    spinlock_t state_lock;            // 自旋锁：用于在中断上下文保护下面这几个状态标志！
++    bool waiting_echo;                // 标志：是否正在等待回波
++    bool rise_seen;                   // 标志：是否已经检测到了上升沿
++    bool measurement_valid;           // 标志：本次测量的脉冲宽度是否有效
++    ktime_t rise_time;                // 记录上升沿到来的高精度时间戳
++    u32 pulse_us;                     // 最终计算出的高电平持续时间（微秒）
++
++    unsigned long next_trigger;       // 下一次允许触发的最早 jiffies
+ };
+ 
++/* ---------------- 中断处理 (Top Half) ---------------- */
+ /*
+- * Echo 中断处理函数
+- *
+- * Echo 上升沿：记录开始时间
+- * Echo 下降沿：计算高电平持续时间
++ * Echo 中断处理函数：配置为双边沿触发 (RISING | FALLING)
++ * 这是硬中断，执行必须极快，绝对不能休眠！
+  */
+ static irqreturn_t sr04_irq_handler(int irq, void *data)
+ {
+-    struct sr04_device *sr04 = data;
++    struct sr04_device *sr04 = data; // 提取私有数据
+     unsigned long flags;
+     int level;
+     bool complete_measurement = false;
+     ktime_t now;
+     s64 pulse_us;
+-    /*
+-     * GPIO 控制器为 i.MX6ULL 本地 GPIO，
+-     * 中断上下文中使用非 cansleep 版本。
+-     */
++
++    /* 获取当前引脚电平。这里是 i.MX6 本地 GPIO，读取极快且不会休眠 */
+     level = gpiod_get_value(sr04->echo_gpio);
+-    if (level < 0)
+-        return IRQ_HANDLED;
+-    now = ktime_get();
++    if (level < 0) return IRQ_HANDLED; // 读取失败则直接返回
++
++    now = ktime_get(); // 抓取当前的高精度时间戳
++
++    /* 必须关中断+自旋锁，防止和进程上下文的 do_measurement 发生死锁或状态错乱 */
+     spin_lock_irqsave(&sr04->state_lock, flags);
++    
++    // 如果系统并没有发起测量请求（比如是外界干扰产生的毛刺中断），直接忽略
+     if (!sr04->waiting_echo) {
+         spin_unlock_irqrestore(&sr04->state_lock, flags);
+         return IRQ_HANDLED;
+@@ -92,35 +104,48 @@ static irqreturn_t sr04_irq_handler(int irq, void *data)
+ 
+     if (level) {
+         /*
+-         * Echo 上升沿
++         * 情况 A：电平为高 (Echo 上升沿)
++         * 意味着超声波刚刚发射出去，回波计时开始！
+          */
+-        sr04->rise_time = now;
+-        sr04->rise_seen = true;
++        sr04->rise_time = now;     // 记录起跑时间
++        sr04->rise_seen = true;    // 标记起跑状态
+     } else if (sr04->rise_seen) {
+         /*
+-         * Echo 下降沿
++         * 情况 B：电平为低 (Echo 下降沿)，且之前已经看到过上升沿
++         * 意味着超声波飞回来了，计时结束！
+          */
++        // 计算时间差（纳秒转微秒）
+         pulse_us = ktime_to_us(ktime_sub(now, sr04->rise_time));
+-        if (pulse_us >= SR04_MIN_PULSE_US &&
+-            pulse_us <= SR04_MAX_PULSE_US) {
++        
++        // 只有脉宽在合理范围内，才认为是有效数据
++        if (pulse_us >= SR04_MIN_PULSE_US && pulse_us <= SR04_MAX_PULSE_US) {
+             sr04->pulse_us = (u32)pulse_us;
+             sr04->measurement_valid = true;
+-            complete_measurement = true;
++            complete_measurement = true; // 标记本次测量大功告成
+         }
++        
++        // 状态机重置，等待下一次测距命令
+         sr04->waiting_echo = false;
+         sr04->rise_seen = false;
+     }
+     spin_unlock_irqrestore(&sr04->state_lock, flags);
++
++    /* 
++     * 如果测量完成，调用 complete 唤醒那个正在休眠死等的进程。
++     * 注意：complete 是可以在中断上下文安全调用的唤醒函数。
++     */
+     if (complete_measurement)
+         complete(&sr04->measurement_done);
+-    return IRQ_HANDLED;
++
++    return IRQ_HANDLED; // 告诉内核中断已处理完毕
+ }
+ 
++/* ---------------- 核心业务逻辑 (进程上下文) ---------------- */
+ /*
+- * 执行一次完整测距
+- *
+- * 调用者必须已经持有 measure_lock。
+- */static int sr04_do_measurement(struct sr04_device *sr04,struct sr04_measurement *result)
++ * 执行一次完整测距，运行在普通进程上下文中（允许休眠）
++ * 调用者（read 或 ioctl）必须在外面套一层 mutex_lock，确保同一时刻只有一个测距任务。
++ */
++static int sr04_do_measurement(struct sr04_device *sr04, struct sr04_measurement *result)
+ {
+     unsigned long flags;
+     long wait_ret;
+@@ -128,13 +153,28 @@ static irqreturn_t sr04_irq_handler(int irq, void *data)
+     bool valid;
+ 
+     memset(result, 0, sizeof(*result));
+-    /*先确保 TRIG 处于低电平*/
++
++    /*
++     * 等到允许触发的最早时刻。next_trigger 由上一次测量结束时按
++     * “回波已结束”还是“等待超时”分别推算，见函数后半段。
++     * 调用者已持有 measure_lock，不会有并发竞争。
++     */
++    if (time_before(jiffies, sr04->next_trigger)) {
++        unsigned long delay = sr04->next_trigger - jiffies;
++
++        if (msleep_interruptible(jiffies_to_msecs(delay)))
++            return -ERESTARTSYS;
++    }
++
++    /* 1. 先确保 TRIG 处于低电平稳态 */
++    // _cansleep 版本表示这个 GPIO 操作底层可能会睡眠。虽然本地 GPIO 不会，但写上是为了兼容性
+     gpiod_set_value_cansleep(sr04->trig_gpio, 0);
+     udelay(2);
+-    /*清除上一次 completion 状态，防止旧中断影响本次测量。*/
++
++    /* 2. 擦除 completion 的历史状态，防止被上一次过期的中断“秒唤醒” */
+     reinit_completion(&sr04->measurement_done);
+ 
+-    /*初始化本次测量状态。*/
++    /* 3. 准备状态机：告诉中断，“我要开始测了，你可以开始抓取上升沿了” */
+     spin_lock_irqsave(&sr04->state_lock, flags);
+     sr04->waiting_echo = true;
+     sr04->rise_seen = false;
+@@ -142,129 +182,141 @@ static irqreturn_t sr04_irq_handler(int irq, void *data)
+     sr04->pulse_us = 0;
+     spin_unlock_irqrestore(&sr04->state_lock, flags);
+ 
+-    /*发送 SR04 触发脉冲。高电平时间必须大于 10us。*/
++    /* 4. 打出触发脉冲：拉高 TRIG 12 微秒，激发硬件发射超声波 */
+     gpiod_set_value_cansleep(sr04->trig_gpio, 1);
+-    udelay(SR04_TRIGGER_US);
++    udelay(SR04_TRIGGER_US); // udelay 是死等（忙等待），12us 很短，用 udelay 没问题
+     gpiod_set_value_cansleep(sr04->trig_gpio, 0);
+ 
+-    /*最多等待 50ms。*/
++    /* 
++     * 5. 让出 CPU 去睡大觉！
++     * 让当前进程挂起到等待队列，最多睡 50ms。
++     * 什么时候醒？ 1. 中断里调用了 complete； 2. 等了 50ms 还没来； 3. 用户按了 Ctrl+C (信号)。
++     */
+     wait_ret = wait_for_completion_interruptible_timeout(
+-        &sr04->measurement_done,
+-        msecs_to_jiffies(SR04_TIMEOUT_MS));
++        &sr04->measurement_done, msecs_to_jiffies(SR04_TIMEOUT_MS));
++
++    /*
++     * 走到这里，上一次的回波窗口已经确定关闭：
++     *   wait_ret > 0 —— 收到回波，窗口在下降沿关闭，只需余振余量；
++     *   wait_ret == 0 —— 等待超时，模块可能仍在等更远的回波，
++     *                    用较长的兜底间隔，避免迟到回波被算进下一次。
++     */
++    if (wait_ret == 0)
++        sr04->next_trigger = jiffies + msecs_to_jiffies(SR04_TIMEOUT_GUARD_MS);
++    else
++        sr04->next_trigger = jiffies + msecs_to_jiffies(SR04_ECHO_GUARD_MS);
+ 
+-    /*等待被信号打断。*/
++    /* 异常 A：用户按了 Ctrl+C 发送信号打断了休眠 */
+     if (wait_ret < 0) {
++        // 收尾清理状态机
+         spin_lock_irqsave(&sr04->state_lock, flags);
+         sr04->waiting_echo = false;
+         sr04->rise_seen = false;
+         sr04->measurement_valid = false;
+         spin_unlock_irqrestore(&sr04->state_lock, flags);
+-        return -ERESTARTSYS;
++        return -ERESTARTSYS; // 通知内核，被信号打断，由内核决定是否重启系统调用
+     }
+ 
+-    /*超时，通常表示：1. Echo 没有连接；2. Echo 没有产生下降沿；3. GPIO 或中断配置错误。*/
++    /* 异常 B：50ms 到了，中断还是没来（可能前方没有障碍物，或者线掉了） */
+     if (wait_ret == 0) {
+         spin_lock_irqsave(&sr04->state_lock, flags);
+         sr04->waiting_echo = false;
+         sr04->rise_seen = false;
+         sr04->measurement_valid = false;
+         spin_unlock_irqrestore(&sr04->state_lock, flags);
+-        result->valid = 0;
+-        return -ETIMEDOUT;
++        result->valid = 0; // 标记数据无效
++        return -ETIMEDOUT; // 返回超时错误码
+     }
+ 
+-    /*读取中断中保存的 Echo 脉宽。*/
++    /* 6. 一切顺利，从状态机里取出中断算好的时间差 */
+     spin_lock_irqsave(&sr04->state_lock, flags);
+     pulse_us = sr04->pulse_us;
+     valid = sr04->measurement_valid;
+     spin_unlock_irqrestore(&sr04->state_lock, flags);
+     if (!valid)
+-        return -EIO;
++        return -EIO; // I/O 错误
+ 
+-    /*声速约为 343m/s。超声波经过的是往返距离，因此：distance_mm = pulse_us * 343 / 2000*/
++    /* 
++     * 7. 物理公式计算
++     * 声速在 15℃ 下约为 340m/s = 0.34mm/us = 340/1000 mm/us
++     * 距离 = 时间 * 速度 / 2 (因为是往返)
++     * mm = pulse_us * 343 / 1000 / 2 = pulse_us * 343 / 2000
++     */
+     result->pulse_us = pulse_us;
+     result->distance_mm = (pulse_us * 343) / 2000;
+     result->valid = 1;
+     return 0;
+ }
+ 
++/* ---------------- 字符设备文件操作 (VFS 接口) ---------------- */
++/* 打开设备节点 (fd = open("/dev/sr04")) */
+ static int sr04_open(struct inode *inode, struct file *filp)
+ {
+     struct miscdevice *miscdev;
+     struct sr04_device *sr04;
++    
++    // 通过 miscdev 的指针倒推找到我们的 sr04_device 私有结构体（极其经典的 C 语言 OOP 技巧）
+     miscdev = filp->private_data;
+-    sr04 = container_of(miscdev,struct sr04_device,miscdev);
++    sr04 = container_of(miscdev, struct sr04_device, miscdev);
++    
++    // 塞给 filp，方便后面 read/ioctl 的时候直接提取
+     filp->private_data = sr04;
+     return 0;
+ }
+ 
+ static int sr04_release(struct inode *inode, struct file *filp)
+ {
+-    return 0;
++    return 0; // 释放逻辑为空
+ }
+ 
+-/*
+- * ioctl 接口：
+- *
+- * 用户空间调用：
+- *
+- * struct sr04_measurement data;
+- * ioctl(fd, SR04_IOC_GET_DISTANCE, &data);
+- */
+-static long sr04_ioctl(struct file *filp,unsigned int cmd,unsigned long arg)
++/* ioctl 接口：适合 C/C++ 程序直接获取二进制结构体数据 */
++static long sr04_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
+ {
+     struct sr04_device *sr04 = filp->private_data;
+     struct sr04_measurement result;
+-    void __user *argp = (void __user *)arg;
++    void __user *argp = (void __user *)arg; // 用户态传递的指针
+     int ret;
+-    if (_IOC_TYPE(cmd) != SR04_IOC_MAGIC)
+-        return -ENOTTY;
+-    if (cmd != SR04_IOC_GET_DISTANCE)
+-        return -ENOTTY;
++    
++    // 基础的魔数和命令字合法性校验
++    if (_IOC_TYPE(cmd) != SR04_IOC_MAGIC) return -ENOTTY;
++    if (cmd != SR04_IOC_GET_DISTANCE) return -ENOTTY;
++    
++    /* 尝试拿互斥锁。如果其他 APP 正在测距，本 APP 会在这里挂起排队 */
+     ret = mutex_lock_interruptible(&sr04->measure_lock);
+-    if (ret)
+-        return ret;
++    if (ret) return ret; // 被信号打断
++    
++    // 调用核心业务逻辑
+     ret = sr04_do_measurement(sr04, &result);
+-    mutex_unlock(&sr04->measure_lock);
+-    if (ret)
+-        return ret;
++    mutex_unlock(&sr04->measure_lock); // 释放锁，让排队的下一个 APP 进去测
++    
++    if (ret) return ret;
++    
++    // 穿透硬件屏障，把内核态的 result 数据拷贝到用户态地址 argp
+     if (copy_to_user(argp, &result, sizeof(result)))
+-        return -EFAULT;
++        return -EFAULT; // 内存越界/缺页错误
+ 
+     return 0;
+ }
+ 
+-/*
+- * read 接口：
+- *
+- * 每次打开后读取一次。
+- *
+- * 示例：
+- *
+- * cat /dev/sr04
+- *
+- * 输出：
+- *
+- * distance_mm=342 distance_cm=34.2 pulse_us=1994 valid=1
+- */
+-static ssize_t sr04_read(struct file *filp,char __user *buf,size_t count,loff_t *ppos)
++/* read 接口：适合在终端里直接 cat /dev/sr04 获取字符串 */
++static ssize_t sr04_read(struct file *filp, char __user *buf, size_t count, loff_t *ppos)
+ {
+     struct sr04_device *sr04 = filp->private_data;
+     struct sr04_measurement result;
+     char output[128];
+-    int len;
+-    int ret;
+-    if (*ppos != 0)
+-        return 0;
++    int len, ret;
++    
++    // 只允许从头读。cat 命令会在读完一次后再次进来(ppos>0)，直接返回 0 (EOF) 让 cat 结束
++    if (*ppos != 0) return 0;
++    
+     ret = mutex_lock_interruptible(&sr04->measure_lock);
+-    if (ret)
+-        return ret;
++    if (ret) return ret;
+     ret = sr04_do_measurement(sr04, &result);
+     mutex_unlock(&sr04->measure_lock);
+-    if (ret)
+-        return ret;
+-    len = scnprintf(output,
+-                    sizeof(output),
++    if (ret) return ret;
++    
++    // 在内核中格式化字符串（注意内核里没有 sprintf 浮点数，必须用除法和取模凑成小数）
++    len = scnprintf(output, sizeof(output),
+                     "distance_mm=%u distance_cm=%u.%u pulse_us=%u valid=%u\n",
+                     result.distance_mm,
+                     result.distance_mm / 10,
+@@ -272,100 +324,139 @@ static ssize_t sr04_read(struct file *filp,char __user *buf,size_t count,loff_t
+                     result.pulse_us,
+                     result.valid);
+ 
+-    return simple_read_from_buffer(buf,count,ppos,output,len);
++    // 调用内核帮我们写好的快捷函数，将字符串送到用户空间并更新偏移量
++    return simple_read_from_buffer(buf, count, ppos, output, len);
+ }
+ 
++/* 关联文件操作函数集 */
+ static const struct file_operations sr04_fops = {
+     .owner = THIS_MODULE,
+     .open = sr04_open,
+     .release = sr04_release,
+     .read = sr04_read,
+-    .unlocked_ioctl = sr04_ioctl,
++    .unlocked_ioctl = sr04_ioctl, // unlocked 代表驱动自己处理了并发，不需要内核加 BKL 大内核锁
+     .llseek = no_llseek,
+ };
+ 
++/* ---------------- Platform Driver 初始化框架 ---------------- */
++/* probe 函数：当设备树和本驱动的 compatible 匹配成功时，内核回调此函数 */
+ static int sr04_probe(struct platform_device *pdev)
+ {
+     struct sr04_device *sr04;
+     int ret;
+     dev_info(&pdev->dev, "SR04 probe start\n");
+-    sr04 = devm_kzalloc(&pdev->dev,sizeof(*sr04),GFP_KERNEL);
+-    if (!sr04)
+-        return -ENOMEM;
++    
++    /* 1. 分配私有数据内存（自动释放机制） */
++    sr04 = devm_kzalloc(&pdev->dev, sizeof(*sr04), GFP_KERNEL);
++    if (!sr04) return -ENOMEM;
++    
+     sr04->dev = &pdev->dev;
++
++    /*
++     * 用 jiffies 初值显式初始化 next_trigger，而不是依赖 kzalloc 的 0。
++     * 内核 jiffies 的初值是 INITIAL_JIFFIES = -300*HZ，开机后 5 分钟内
++     * 它是负数，若拿未初始化的 0 去做 time_before() 比较会成立，
++     * 算出的 delay 会回绕成极大值，导致第一次读就睡上几分钟。
++     */
++    sr04->next_trigger = jiffies;
++    
++    /* 2. 初始化各类锁和同步量 */
+     mutex_init(&sr04->measure_lock);
+     spin_lock_init(&sr04->state_lock);
+     init_completion(&sr04->measurement_done);
+ 
+-    sr04->trig_gpio = devm_gpiod_get(&pdev->dev,"trig",GPIOD_OUT_LOW);
++    /* 3. 解析设备树并获取 GPIO 描述符（自动释放机制） */
++    sr04->trig_gpio = devm_gpiod_get(&pdev->dev, "trig", GPIOD_OUT_LOW);
+     if (IS_ERR(sr04->trig_gpio)) {
+-        ret = PTR_ERR(sr04->trig_gpio);
+-        dev_err(&pdev->dev,"failed to get trig GPIO: %d\n",ret);
++        ret = PTR_ERR(sr04->trig_gpio); // 将指针转换成负数错误码
++        dev_err(&pdev->dev, "failed to get trig GPIO: %d\n", ret);
+         return ret;
+     }
+ 
+-    sr04->echo_gpio = devm_gpiod_get(&pdev->dev,"echo",GPIOD_IN);
++    sr04->echo_gpio = devm_gpiod_get(&pdev->dev, "echo", GPIOD_IN);
+     if (IS_ERR(sr04->echo_gpio)) {
+         ret = PTR_ERR(sr04->echo_gpio);
+-        dev_err(&pdev->dev,"failed to get echo GPIO: %d\n",ret);
++        dev_err(&pdev->dev, "failed to get echo GPIO: %d\n", ret);
+         return ret;
+     }
+ 
++    /* 4. 将 GPIO 转换为虚拟中断号 */
+     sr04->irq = gpiod_to_irq(sr04->echo_gpio);
+     if (sr04->irq < 0) {
+-        dev_err(&pdev->dev,"failed to convert echo GPIO to IRQ: %d\n",sr04->irq);
++        dev_err(&pdev->dev, "failed to convert echo GPIO to IRQ: %d\n", sr04->irq);
+         return sr04->irq;
+     }
+ 
+-    ret = devm_request_irq(&pdev->dev,sr04->irq,sr04_irq_handler,IRQF_TRIGGER_RISING |
+-                    IRQF_TRIGGER_FALLING,DRIVER_NAME,sr04);
++    /* 
++     * 5. 申请硬中断，配置为双边沿触发，并关联 handler（自动释放机制）
++     * 这里的上下文极快，所以没用 Threaded IRQ，直接在硬中断里抓高精度时间即可。
++     */
++    ret = devm_request_irq(&pdev->dev, sr04->irq, sr04_irq_handler, 
++                           IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING, 
++                           DRIVER_NAME, sr04);
+     if (ret) {
+-        dev_err(&pdev->dev,"failed to request echo IRQ %d: %d\n",sr04->irq,ret);
++        dev_err(&pdev->dev, "failed to request echo IRQ %d: %d\n", sr04->irq, ret);
+         return ret;
+     }
+ 
+-    sr04->miscdev.minor = MISC_DYNAMIC_MINOR;
++    /* 6. 注册杂项设备，生成 /dev/sr04 节点 */
++    sr04->miscdev.minor = MISC_DYNAMIC_MINOR; // 让内核动态分配次设备号
+     sr04->miscdev.name = DEVICE_NAME;
+     sr04->miscdev.fops = &sr04_fops;
+     sr04->miscdev.parent = &pdev->dev;
+ 
+     ret = misc_register(&sr04->miscdev);
+     if (ret) {
+-        dev_err(&pdev->dev,"failed to register misc device: %d\n",ret);
+-        return ret;
++        dev_err(&pdev->dev, "failed to register misc device: %d\n", ret);
++        return ret; // 这里失败了也不用手动 kfree 内存，devres 机制全包了！
+     }
+ 
++    /* 7. 把我们构造好的私有数据挂载到 pdev 上，方便 remove 函数时取出来 */
+     platform_set_drvdata(pdev, sr04);
+ 
+-    dev_info(&pdev->dev,"SR04 initialized successfully\n");
+-    dev_info(&pdev->dev,"device: /dev/%s, irq: %d\n",DEVICE_NAME,sr04->irq);
++    dev_info(&pdev->dev, "SR04 initialized successfully\n");
++    dev_info(&pdev->dev, "device: /dev/%s, irq: %d\n", DEVICE_NAME, sr04->irq);
+     return 0;
+ }
+ 
++/* remove 函数：驱动卸载 (rmmod) 时回调 */
+ static int sr04_remove(struct platform_device *pdev)
+ {
+     struct sr04_device *sr04;
+     unsigned long flags;
++    
++    // 取回 probe 步骤 7 中存进去的私有数据
+     sr04 = platform_get_drvdata(pdev);
++    
++    /* 1. 注销 misc 节点，阻止用户态再发起 open/read 请求 */
+     misc_deregister(&sr04->miscdev);
++    
++    /* 2. 复位内部状态机 */
+     spin_lock_irqsave(&sr04->state_lock, flags);
+     sr04->waiting_echo = false;
+     sr04->rise_seen = false;
+     spin_unlock_irqrestore(&sr04->state_lock, flags);
++    
++    /* 
++     * 3. 极其关键：同步中断！
++     * 如果此时某个 CPU 核心正在执行 sr04_irq_handler，必须等它执行完，
++     * 否则下面一卸载驱动，那边的中断指令跑飞，系统直接 Kernel Panic。
++     */
+     synchronize_irq(sr04->irq);
++    
++    /* 4. 强制复位引脚状态，安全断电 */
+     gpiod_set_value_cansleep(sr04->trig_gpio, 0);
++    
+     dev_info(&pdev->dev, "SR04 driver removed\n");
+-    return 0;
++    return 0; 
++    // 返回后，devm 框架介入，自动注销中断线，释放引脚控制权，回收内存。
+ }
+ 
++/* ---------------- 驱动元数据映射表 ---------------- */
+ static const struct of_device_id sr04_of_match[] = {
+-    {
+-        .compatible = "smarthome,sr04",
+-    },
+-    {
+-    }
++    { .compatible = "smarthome,sr04", }, // 必须和设备树中的 compatible 字符串一模一样
++    { }
+ };
+-
+ MODULE_DEVICE_TABLE(of, sr04_of_match);
+ 
+ static struct platform_driver sr04_driver = {
+@@ -382,4 +473,4 @@ module_platform_driver(sr04_driver);
+ 
+ MODULE_LICENSE("GPL v2");
+ MODULE_AUTHOR("JJL");
+-MODULE_DESCRIPTION("i.MX6ULL SR04 ultrasonic distance driver");
+\ No newline at end of file
++MODULE_DESCRIPTION("i.MX6ULL SR04 ultrasonic distance driver");
+diff --git a/drivers/smarthome/sr501.c b/drivers/smarthome/sr501.c
+index 6026e7ff..a37fe1e5 100644
+--- a/drivers/smarthome/sr501.c
++++ b/drivers/smarthome/sr501.c
+@@ -97,6 +97,7 @@ static irqreturn_t sr501_irq_handler(int irq, void *data)
+     return IRQ_HANDLED;
+ }
+ 
++/* 下面是面向用户态的接口 */
+ static int sr501_open(struct inode *inode, struct file *filp)
+ {
+     struct sr501_device *dev;
+@@ -129,10 +130,8 @@ static int sr501_release(struct inode *inode, struct file *filp)
+     return 0;
+ }
+ 
+-static ssize_t sr501_read(struct file *filp,
+-                          char __user *buffer,
+-                          size_t count,
+-                          loff_t *offset)
++static ssize_t sr501_read(struct file *filp,char __user *buffer,
++                          size_t count,loff_t *offset)
+ {
+     struct sr501_file_context *ctx;
+     struct sr501_device *dev;
+@@ -414,7 +413,7 @@ static struct platform_driver sr501_driver = {
+     },
+ };
+ 
+-module_platform_driver(sr501_driver);
++module_platform_driver(sr501_driver); /* 虚拟平台的设备驱动*/
+ 
+ MODULE_LICENSE("GPL");
+ MODULE_AUTHOR("smarthome");

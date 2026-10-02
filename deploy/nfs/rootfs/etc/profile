@@ -1,1 +1,5 @@
 export PATH=/bin:/sbin:/usr/bin:/usr/sbin
+
+# 板卡按中国标准时间显示（UTC+8）；/etc/localtime 是 glibc 用的 TZif，
+# TZ 变量则兼容 busybox / 非 glibc 程序
+export TZ=CST-8
